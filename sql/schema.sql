@@ -2,6 +2,9 @@ CREATE TABLE IF NOT EXISTS users (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     phone_number TEXT NOT NULL UNIQUE,
     display_name TEXT,
+    access_status TEXT NOT NULL DEFAULT 'pendente'
+        CHECK (access_status IN ('pendente', 'ativo', 'bloqueado')),
+    access_expires_at TIMESTAMPTZ,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

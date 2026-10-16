@@ -7,6 +7,7 @@ import httpx
 from dotenv import load_dotenv
 from sqlalchemy import text
 
+from app.comandos import processar_mensagem
 from app.db import get_engine
 
 load_dotenv()
@@ -81,6 +82,7 @@ def handle_incoming(payload: dict) -> None:
             if not register_message(message_id, sender):
                 continue  # mensagem repetida
             if message.get("type") == "text":
-                send_text(sender, "Oi, eu sou a Dona Fatura!")
+                texto = message.get("text", {}).get("body", "")
+                send_text(sender, processar_mensagem(sender, texto))
         except Exception:
             logger.exception("Erro ao processar mensagem do WhatsApp")

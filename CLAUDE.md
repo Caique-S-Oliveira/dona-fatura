@@ -108,5 +108,7 @@ app/graficos.py, app/comandos/, sql/schema.sql, tests/
 Etapa 1 concluída — estrutura inicial, endpoint de saúde e Git local criados.
 Etapa 2 concluída — esquema PostgreSQL e teste de conexão pelo DATABASE_URL criados.
 Etapa 3 concluída — webhook do WhatsApp (verificação, assinatura, anti-repetição, resposta "Oi, eu sou a Dona Fatura!").
+Etapa 4 concluída — roteador de comandos em app/comandos/, cadastro automático, /ajuda e "Ainda estou aprendendo isso".
+Etapa 4 (complemento) concluída — controle de acesso: status pendente/ativo/bloqueado, /convite, /liberar e /bloquear (admin), sql/alter_acesso.sql.
 (Ao fim de cada etapa, acrescente uma linha: "Etapa N concluída — resumo curto".)
 (Etapas 5 em diante seguem a nova ordem de dona-fatura-ajustes-pos-pesquisa.md.)

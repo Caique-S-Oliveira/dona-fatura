@@ -12,7 +12,7 @@ class TestRoteador(unittest.TestCase):
         self.assertEqual(responder("  /AJUDA  "), TEXTO_AJUDA)
 
     def test_comando_nao_implementado(self):
-        self.assertEqual(responder("/gasto 45,90 mercado"), "Ainda estou aprendendo isso.")
+        self.assertEqual(responder("/resumo"), "Ainda estou aprendendo isso.")
 
     def test_comando_com_acento(self):
         self.assertEqual(responder("/previsão"), "Ainda estou aprendendo isso.")

@@ -13,6 +13,11 @@ USUARIO = "5511988887777"
 @patch.dict(os.environ, {"ADMIN_NUMERO": "+55 (11) 90000-0000", "CODIGO_CONVITE": "abc123"})
 @patch("app.comandos.garantir_usuario", return_value=False)
 class TestAcesso(unittest.TestCase):
+    def setUp(self):
+        patcher = patch("app.comandos.limpar_estado")
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
     def test_so_digitos(self, _):
         self.assertEqual(so_digitos("+55 (11) 98888-7777"), USUARIO)
 

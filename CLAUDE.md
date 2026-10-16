@@ -112,3 +112,6 @@ Etapa 4 concluída — roteador de comandos em app/comandos/, cadastro automáti
 Etapa 4 (complemento) concluída — controle de acesso: status pendente/ativo/bloqueado, /convite, /liberar e /bloquear (admin), sql/alter_acesso.sql.
 (Ao fim de cada etapa, acrescente uma linha: "Etapa N concluída — resumo curto".)
 (Etapas 5 em diante seguem a nova ordem de dona-fatura-ajustes-pos-pesquisa.md.)
+Etapa 5 concluída — /inicio passo a passo (nome, renda, metas em R$, % ou 50/30/20) com aviso de privacidade, /metas para ver e alterar, estado da conversa no banco, sql/alter_inicio.sql.
+Etapa 6 concluída — /gasto e frase "gastei 45 no mercado" (regras, IA só se não entender), sugestão de categoria (regras aprendidas > nome > palavras > IA) com botões [Sim] [Corrigir] e aprendizado, /categorias (listar/criar), /desfazer com confirmação, app/ia.py.
+Etapa 6 (complemento) concluída — mensagens interativas: Corrigir -> [Valor] [Categoria]; lista de categorias (8 mais usadas + "Outras…" + "➕ Nova categoria"); /categorias abre a lista; nova categoria com nome por texto e tipo por botões.

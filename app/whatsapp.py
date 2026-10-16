@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 
 from app.comandos import processar_mensagem
+from app.comandos.resposta import Resposta
 from app.db import get_engine
 
 load_dotenv()
@@ -52,7 +53,7 @@ def register_message(message_id: str, sender_phone: str) -> bool:
         return result.rowcount == 1
 
 
-def send_text(to: str, body: str) -> None:
+def _post_message(payload: dict) -> None:
     token = os.getenv("WHATSAPP_TOKEN")
     phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
     if not token or not phone_number_id:
@@ -60,15 +61,78 @@ def send_text(to: str, body: str) -> None:
     response = httpx.post(
         f"{GRAPH_API_URL}/{phone_number_id}/messages",
         headers={"Authorization": f"Bearer {token}"},
-        json={
-            "messaging_product": "whatsapp",
-            "to": to,
-            "type": "text",
-            "text": {"body": body},
-        },
+        json={"messaging_product": "whatsapp", **payload},
         timeout=15,
     )
     response.raise_for_status()
+
+
+def send_text(to: str, body: str) -> None:
+    _post_message({"to": to, "type": "text", "text": {"body": body}})
+
+
+def send_buttons(to: str, body: str, buttons: tuple[str, ...]) -> None:
+    """Mensagem com botões de resposta rápida (a Meta aceita no máximo 3)."""
+    _post_message({
+        "to": to,
+        "type": "interactive",
+        "interactive": {
+            "type": "button",
+            "body": {"text": body},
+            "action": {
+                "buttons": [
+                    {"type": "reply", "reply": {"id": titulo.lower(), "title": titulo[:20]}}
+                    for titulo in buttons[:3]
+                ]
+            },
+        },
+    })
+
+
+def send_list(to: str, resposta: Resposta) -> None:
+    """Mensagem de lista (a Meta aceita no máximo 10 linhas)."""
+    linhas = []
+    for id_linha, titulo, descricao in resposta.lista[:10]:
+        linha = {"id": id_linha, "title": titulo[:24]}
+        if descricao:
+            linha["description"] = descricao[:72]
+        linhas.append(linha)
+    _post_message({
+        "to": to,
+        "type": "interactive",
+        "interactive": {
+            "type": "list",
+            "body": {"text": resposta.texto[:1024]},
+            "action": {
+                "button": resposta.botao_lista[:20],
+                "sections": [{"title": "Categorias", "rows": linhas}],
+            },
+        },
+    })
+
+
+def send_reply(to: str, resposta: str | Resposta) -> None:
+    if isinstance(resposta, Resposta) and resposta.lista:
+        send_list(to, resposta)
+    elif isinstance(resposta, Resposta) and resposta.botoes:
+        send_buttons(to, resposta.texto, resposta.botoes)
+    else:
+        send_text(to, resposta.texto if isinstance(resposta, Resposta) else resposta)
+
+
+def message_text(message: dict) -> str | None:
+    """Texto digitado, título do botão tocado ou id da linha da lista tocada.
+
+    None para outros tipos (foto etc.).
+    """
+    if message.get("type") == "text":
+        return message.get("text", {}).get("body", "")
+    if message.get("type") == "interactive":
+        interativo = message.get("interactive", {})
+        if interativo.get("type") == "list_reply":
+            return interativo.get("list_reply", {}).get("id")
+        return interativo.get("button_reply", {}).get("title")
+    return None
 
 
 def handle_incoming(payload: dict) -> None:
@@ -81,8 +145,8 @@ def handle_incoming(payload: dict) -> None:
                 continue
             if not register_message(message_id, sender):
                 continue  # mensagem repetida
-            if message.get("type") == "text":
-                texto = message.get("text", {}).get("body", "")
-                send_text(sender, processar_mensagem(sender, texto))
+            texto = message_text(message)
+            if texto is not None:
+                send_reply(sender, processar_mensagem(sender, texto))
         except Exception:
             logger.exception("Erro ao processar mensagem do WhatsApp")

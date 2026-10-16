@@ -30,3 +30,18 @@ def garantir_usuario(telefone: str) -> bool:
             {"account_id": account_id, "user_id": user_id},
         )
         return True
+
+
+def conta_do_usuario(telefone: str) -> tuple[str, str]:
+    """Devolve (user_id, account_id) da conta mais recente em que o usuário está."""
+    with get_engine().connect() as connection:
+        linha = connection.execute(
+            text(
+                "SELECT u.id AS user_id, m.account_id FROM users u"
+                " JOIN members m ON m.user_id = u.id"
+                " WHERE u.phone_number = :telefone"
+                " ORDER BY m.joined_at DESC LIMIT 1"
+            ),
+            {"telefone": telefone},
+        ).one()
+    return linha.user_id, linha.account_id

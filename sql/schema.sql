@@ -26,6 +26,7 @@ CREATE TABLE IF NOT EXISTS members (
     user_id UUID NOT NULL REFERENCES users (id),
     role TEXT NOT NULL DEFAULT 'partner'
         CHECK (role IN ('owner', 'partner')),
+    expected_income NUMERIC(12, 2) CHECK (expected_income >= 0),
     joined_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (account_id, user_id)
 );

@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# Troque SEU-DOMINIO.com.br pelo domínio real no lançamento.
+Sitemap: https://SEU-DOMINIO.com.br/sitemap.xml

@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Política de Privacidade — Dona Fatura</title>
+  <meta name="description" content="Quais dados a Dona Fatura coleta, para quê, por quanto tempo e como apagar.">
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="estilo.css">
+</head>
+<body data-pagina="legal">
+  <header class="topo"><div class="wrap"><a class="marca" href="index.html"><img src="favicon.svg" width="28" height="28" alt="">Dona Fatura</a></div></header>
+  <main class="wrap legal">
+    <p class="rascunho">Rascunho — revisar antes do lançamento.</p>
+    <h1>Política de Privacidade</h1>
+    <p>Última atualização: 17/10/2026. Esta página trata dos dados coletados <b>neste site</b> (lista de espera e medição).
+      Os dados usados dentro do WhatsApp têm a política do bot, citada no fim.</p>
+
+    <h2>Quem é o responsável</h2>
+    <p>Caique Santos de Oliveira, responsável pelo projeto Dona Fatura (piloto). Contato:
+      <a data-email href="mailto:donafatura.app@gmail.com">donafatura.app@gmail.com</a>.</p>
+
+    <h2>Quais dados e para quê</h2>
+    <table>
+      <tr><th>Dado</th><th>Para quê</th><th>Base legal (LGPD)</th></tr>
+      <tr><td>Nome e WhatsApp, quando você entra na lista de espera, e o registro de que você aceitou ser contatado</td><td>Avisar por WhatsApp quando o seu acesso for liberado</td><td>Consentimento</td></tr>
+      <tr><td>Origem do clique (gclid, utm_source, utm_medium, utm_campaign, utm_term, utm_content) e a versão do título vista</td><td>Saber qual anúncio ou link trouxe cada cadastro</td><td>Legítimo interesse; guardado só junto do cadastro</td></tr>
+      <tr><td>Dados de uso do site (páginas vistas, cliques, rolagem), via Google Analytics e Google Ads</td><td>Medir e melhorar a página e os anúncios</td><td>Consentimento (só se você aceitar o banner de cookies)</td></tr>
+    </table>
+    <p>Não pedimos CPF, endereço, dados bancários nem senhas.</p>
+
+    <h2>Cookies e armazenamento</h2>
+    <p>Os cookies do Google (Analytics e Ads) só são ativados se você tocar em “Aceitar” no banner; sem o aceite, nenhum
+      script do Google é carregado. Você pode mudar de ideia em “Preferências de cookies”, no rodapé. O navegador
+      também guarda, só na sua aba, a origem do clique (UTM) para ligá-la ao cadastro, e a sua escolha sobre cookies.</p>
+
+    <h2>Com quem os dados passam</h2>
+    <ul>
+      <li>Supabase (banco de dados) e Render (hospedagem): onde o cadastro é guardado e processado.</li>
+      <li>Google (Analytics e Ads): apenas se você aceitar os cookies.</li>
+    </ul>
+    <p>Não vendemos seus dados. Quem administra o banco de dados tem acesso técnico ao cadastro.</p>
+
+    <h2>Por quanto tempo guardamos</h2>
+    <p>O cadastro da lista de espera fica até você ser liberado e decidir usar o bot, ou até você pedir a exclusão.
+      Cadastros sem uso são apagados em até 12 meses. <i>[revisar prazo antes do lançamento]</i></p>
+
+    <h2>Seus direitos</h2>
+    <p>Você pode pedir a confirmação do tratamento, acesso, correção, exclusão, portabilidade e retirar o consentimento
+      quando quiser (LGPD, art. 18). Escreva para <a data-email href="mailto:donafatura.app@gmail.com">donafatura.app@gmail.com</a>
+      informando o WhatsApp usado no cadastro; respondemos em até 15 dias.</p>
+
+    <h2>Como apagar</h2>
+    <p>Para sair da lista de espera e apagar seu cadastro, envie um e-mail. Se você já usa o bot, mande
+      <b>/apagar_meus_dados</b> no WhatsApp.</p>
+
+    <h2>Política do bot</h2>
+    <p>Como o bot trata os dados dentro do WhatsApp (valores, fotos, IA): <a id="link-politica-bot" href="#" hidden>política de privacidade do bot</a>.
+      <i>[o link aparece quando URL_APP estiver preenchida no config.js]</i></p>
+  </main>
+  <footer id="rodape" class="rodape"></footer>
+  <script src="config.js"></script>
+  <script src="conteudo.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

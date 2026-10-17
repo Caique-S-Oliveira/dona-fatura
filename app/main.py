@@ -7,12 +7,14 @@ from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from app.alertas import executar_alertas
+from app.leads import instalar as instalar_leads
 from app.paginas import EXCLUSAO, PRIVACIDADE
 from app.whatsapp import handle_incoming, verify_signature
 
 logging.basicConfig(level=logging.INFO)  # sem isso o log dos alertas (INFO) não aparece
 
 app = FastAPI()
+instalar_leads(app)  # POST /lead (lista de espera da landing page) + CORS
 
 
 @app.get("/")

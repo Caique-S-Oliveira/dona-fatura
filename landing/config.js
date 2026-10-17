@@ -24,6 +24,6 @@ window.CONFIG = {
   ENDPOINT_LEAD_LOCAL: "http://127.0.0.1:8000/lead",
 
   EMAIL: "donafatura.app@gmail.com",
-  DOMINIO: "",                 // ex.: "https://donafatura.com.br" (sem barra no final)
-  URL_APP: ""                  // endereço do Render, só para linkar a política do bot (ex.: "https://SEU-APP.onrender.com")
+  DOMINIO: "https://dona-fatura.pages.dev",                 // ex.: "https://donafatura.com.br" (sem barra no final)
+  URL_APP: "https://dona-fatura.onrender.com"                  // endereço do Render, só para linkar a política do bot (ex.: "https://SEU-APP.onrender.com")
 };

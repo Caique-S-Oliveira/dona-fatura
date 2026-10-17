@@ -1,3 +1,5 @@
+from app.comandos.acesso import cadastro_completo, eh_admin
+
 TEXTO_AJUDA = """*Dona Fatura - comandos*
 
 *Registrar*
@@ -30,5 +32,25 @@ Também vale escrever: "gastei 45 no mercado" ou mandar a foto/PDF do comprovant
 /apagar_meus_dados - apaga tudo"""
 
 
+TEXTO_INICIAR = """*Dona Fatura*
+Eu registro seus ganhos e gastos aqui no WhatsApp, comparo com suas metas e aviso o que corrigir.
+
+Mande /inicio para configurar seu nome, renda e metas. Leva uns 2 minutos."""
+
+TEXTO_ADMIN = """*Administração*
+/pendentes - pedidos de acesso (com botões)
+/liberar NÚMERO
+/negar NÚMERO
+/usuarios - números e status"""
+
+
 def comando_ajuda(argumentos: str) -> str:
     return TEXTO_AJUDA
+
+
+def comando_ajuda_usuario(telefone: str, argumentos: str) -> str:
+    """Ajuda conforme quem pergunta: sem /inicio concluído só explica como começar."""
+    texto = TEXTO_AJUDA if cadastro_completo(telefone) else TEXTO_INICIAR
+    if eh_admin(telefone):
+        texto += "\n\n" + TEXTO_ADMIN
+    return texto

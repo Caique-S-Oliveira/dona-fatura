@@ -145,6 +145,7 @@ class TestListaDeCategorias(unittest.TestCase):
 
 @patch("app.comandos.ler_estado", return_value=None)
 @patch("app.comandos.garantir_usuario", return_value=False)
+@patch("app.comandos.cadastro_completo", new=lambda telefone: True)
 @patch("app.comandos.status_acesso", return_value="ativo")
 @patch("app.comandos.limpar_estado")
 @patch("app.comandos.gasto.salvar_estado")
@@ -431,6 +432,7 @@ class TestDesfazer(unittest.TestCase):
     @patch("app.comandos.desfazer.salvar_estado")
     @patch("app.comandos.desfazer.ultimo_registro")
     @patch("app.comandos.garantir_usuario", return_value=False)
+    @patch("app.comandos.cadastro_completo", new=lambda telefone: True)
     @patch("app.comandos.status_acesso", return_value="ativo")
     @patch("app.comandos.limpar_estado")
     def test_pede_confirmacao(self, _l, _s, _g, ultimo, salvar, *_):

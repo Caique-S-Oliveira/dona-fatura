@@ -56,7 +56,7 @@ def _apagar(telefone: str, user_id, account_id) -> bool:
             "DELETE FROM categories WHERE account_id = :conta",
             "UPDATE members SET expected_income = NULL"
             " WHERE account_id = :conta AND user_id = :usuario",
-            "UPDATE users SET display_name = NULL WHERE id = :usuario",
+            "UPDATE users SET display_name = NULL, cadastro_completo = FALSE WHERE id = :usuario",
             "DELETE FROM processed_messages WHERE sender_phone_number = :telefone",
         ):
             connection.execute(text(comando), parametros)

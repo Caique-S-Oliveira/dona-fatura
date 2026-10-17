@@ -113,6 +113,7 @@ class TestConversa(unittest.TestCase):
         self.assertEqual(params["data"], "2026-10-05")
 
 
+@patch("app.comandos.cadastro_completo", new=lambda telefone: True)
 @patch("app.comandos.garantir_usuario", return_value=False)
 @patch("app.comandos.eh_admin", return_value=False)
 @patch("app.comandos.status_acesso", return_value="ativo")

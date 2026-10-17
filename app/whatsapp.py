@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 
 from app import alertas
+from app.comandos import acesso
 from app.comandos import processar_comprovante, processar_mensagem
 from app.comandos.resposta import Resposta
 from app.comandos.sair_casal import pegar_avisos
@@ -114,8 +115,8 @@ def send_image(to: str, png: bytes, legenda: str) -> None:
     })
 
 
-def send_buttons(to: str, body: str, buttons: tuple[str, ...]) -> None:
-    """Mensagem com botões de resposta rápida (a Meta aceita no máximo 3)."""
+def send_buttons_ids(to: str, body: str, buttons: list[tuple[str, str]]) -> None:
+    """Botões de resposta rápida com id próprio: (id, título). A Meta aceita no máximo 3."""
     _post_message({
         "to": to,
         "type": "interactive",
@@ -124,12 +125,17 @@ def send_buttons(to: str, body: str, buttons: tuple[str, ...]) -> None:
             "body": {"text": body},
             "action": {
                 "buttons": [
-                    {"type": "reply", "reply": {"id": titulo.lower(), "title": titulo[:20]}}
-                    for titulo in buttons[:3]
+                    {"type": "reply", "reply": {"id": id_botao, "title": titulo[:20]}}
+                    for id_botao, titulo in buttons[:3]
                 ]
             },
         },
     })
+
+
+def send_buttons(to: str, body: str, buttons: tuple[str, ...]) -> None:
+    """Mensagem com botões de resposta rápida (a Meta aceita no máximo 3)."""
+    send_buttons_ids(to, body, [(titulo.lower(), titulo) for titulo in buttons])
 
 
 def send_list(to: str, resposta: Resposta) -> None:
@@ -154,7 +160,9 @@ def send_list(to: str, resposta: Resposta) -> None:
     })
 
 
-def send_reply(to: str, resposta: str | Resposta) -> None:
+def send_reply(to: str, resposta: str | Resposta | None) -> None:
+    if resposta is None:
+        return  # número não liberado: silêncio
     if isinstance(resposta, Resposta) and resposta.imagem:
         send_image(to, resposta.imagem, resposta.texto)
     elif isinstance(resposta, Resposta) and resposta.lista:
@@ -178,6 +186,25 @@ def message_text(message: dict) -> str | None:
             return interativo.get("list_reply", {}).get("id")
         return interativo.get("button_reply", {}).get("title")
     return None
+
+
+def message_button_id(message: dict) -> str | None:
+    """Id do botão de resposta rápida tocado (None para o resto)."""
+    if message.get("type") != "interactive":
+        return None
+    return message.get("interactive", {}).get("button_reply", {}).get("id")
+
+
+def extract_profile_names(payload: dict) -> dict[str, str]:
+    """Nome do perfil do WhatsApp por número (vem em contacts, no webhook)."""
+    nomes = {}
+    for entry in payload.get("entry", []):
+        for change in entry.get("changes", []):
+            for contato in change.get("value", {}).get("contacts", []):
+                nome = contato.get("profile", {}).get("name")
+                if contato.get("wa_id") and nome:
+                    nomes[contato["wa_id"]] = nome
+    return nomes
 
 
 def message_media(message: dict) -> tuple[str, str] | None:
@@ -218,6 +245,7 @@ def entregar_avisos(destino: str) -> None:
 
 def handle_incoming(payload: dict) -> None:
     """Processa o webhook depois de a resposta 200 já ter sido enviada."""
+    nomes = extract_profile_names(payload)
     for message in extract_messages(payload):
         try:
             message_id = message.get("id")
@@ -226,9 +254,23 @@ def handle_incoming(payload: dict) -> None:
                 continue
             if not register_message(message_id, sender):
                 continue  # mensagem repetida
+            texto = message_text(message)
+            botao = message_button_id(message)
+            if botao and botao.startswith(acesso.PREFIXO_BOTAO):
+                confirmacao = acesso.tratar_botao(sender, botao)  # [Liberar] [Negar] do admin
+                if confirmacao:
+                    send_text(sender, confirmacao)
+                continue
+            # Porta de entrada: antes de avisos, comandos, IA ou download de mídia.
+            porta = acesso.avaliar(sender, nomes.get(sender), texto)
+            if not porta.liberado:
+                if porta.resposta:
+                    send_text(sender, porta.resposta)
+                if porta.novo_pedido:
+                    acesso.enviar_pedidos()
+                continue
             entregar_avisos(sender)
             alertas.abrir_fila()
-            texto = message_text(message)
             midia = message_media(message)
             if texto is not None:
                 send_reply(sender, processar_mensagem(sender, texto))

@@ -6,7 +6,8 @@ from app.db import get_engine
 def garantir_usuario(telefone: str) -> bool:
     """Cadastra o usuário (com conta individual) se for a primeira mensagem.
 
-    Devolve True se o usuário acabou de ser criado.
+    Devolve True se o usuário ou a conta acabou de ser criado. Quem ainda é só um pedido de
+    acesso (registrar_pendente) tem usuário, mas não conta; a conta nasce aqui, depois da liberação.
     """
     with get_engine().begin() as connection:
         user_id = connection.execute(
@@ -17,7 +18,14 @@ def garantir_usuario(telefone: str) -> bool:
             {"telefone": telefone},
         ).scalar()
         if user_id is None:
-            return False  # já cadastrado
+            user_id = connection.execute(
+                text("SELECT id FROM users WHERE phone_number = :telefone"), {"telefone": telefone}
+            ).scalar_one()
+            tem_conta = connection.execute(
+                text("SELECT 1 FROM members WHERE user_id = :user_id LIMIT 1"), {"user_id": user_id}
+            ).first()
+            if tem_conta:
+                return False  # já cadastrado
         account_id = connection.execute(
             text("INSERT INTO accounts (owner_user_id) VALUES (:user_id) RETURNING id"),
             {"user_id": user_id},

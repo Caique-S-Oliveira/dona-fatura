@@ -36,7 +36,10 @@ SCHEMA = """
 CREATE TABLE users (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     phone_number TEXT NOT NULL UNIQUE, display_name TEXT,
-    access_status TEXT NOT NULL DEFAULT 'pendente', access_expires_at TEXT);
+    access_status TEXT NOT NULL DEFAULT 'pendente', access_expires_at TEXT,
+    cadastro_completo INTEGER NOT NULL DEFAULT 0, profile_name TEXT,
+    pending_reply_sent INTEGER NOT NULL DEFAULT 0, admin_notified INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')));
 CREATE TABLE accounts (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     owner_user_id TEXT NOT NULL, mode TEXT NOT NULL DEFAULT 'individual',
@@ -154,7 +157,8 @@ class BancoDeTeste(unittest.TestCase):
     def cadastrar(self, telefone, nome, renda=None):
         garantir_usuario(telefone)
         user_id, account_id = conta_do_usuario(telefone)
-        self.sql("UPDATE users SET access_status = 'ativo', display_name = :n WHERE id = :u",
+        self.sql("UPDATE users SET access_status = 'ativo', cadastro_completo = 1, display_name = :n"
+                 " WHERE id = :u",
                  n=nome, u=user_id)
         if renda is not None:
             self.sql("UPDATE members SET expected_income = :r WHERE user_id = :u", r=renda, u=user_id)

@@ -153,7 +153,7 @@ def gravar_inicio(telefone: str, dados: dict) -> bool:
     casal = conta_em_casal(account_id)
     with get_engine().begin() as connection:
         connection.execute(
-            text("UPDATE users SET display_name = :nome WHERE id = :usuario"),
+            text("UPDATE users SET display_name = :nome, cadastro_completo = TRUE WHERE id = :usuario"),
             {"nome": dados["nome"], "usuario": user_id},
         )
         connection.execute(

@@ -100,6 +100,7 @@ class TestAcesso(unittest.TestCase):
         processar_comprovante(USUARIO, "image/png", baixar)
         baixar.assert_not_called()
 
+    @patch("app.comandos.cadastro_completo", new=lambda telefone: True)
     @patch("app.comandos.receber_comprovante", return_value="ok")
     @patch("app.comandos.ler_estado", return_value=None)
     @patch("app.comandos.limpar_estado")

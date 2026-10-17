@@ -2,14 +2,14 @@ from dataclasses import replace
 
 from app import ia
 from app.comandos.acesso import (
-    MSG_INATIVO,
-    MSG_PENDENTE,
+    MSG_ANTES_DO_INICIO,
+    cadastro_completo,
     comando_admin,
     comando_convite,
     eh_admin,
     status_acesso,
 )
-from app.comandos.ajuda import comando_ajuda
+from app.comandos.ajuda import comando_ajuda, comando_ajuda_usuario
 from app.comandos.cadastro import garantir_usuario
 from app.comandos.casal import ESTADO as ESTADO_CASAL
 from app.comandos.casal import comando_casal, comando_entrar, continuar_casal
@@ -67,6 +67,7 @@ COMANDOS = {
 
 # Comandos que precisam saber quem mandou: nome -> função(telefone, argumentos).
 COMANDOS_COM_USUARIO = {
+    "ajuda": comando_ajuda_usuario,
     "inicio": comando_inicio,
     "metas": comando_metas,
     "gasto": comando_gasto,
@@ -93,8 +94,8 @@ COMANDOS_CONHECIDOS = {
     "apagar_meus_dados", "ajuda", "grafico", "casal", "entrar", "grupo", "sair_casal",
 }
 
-# Comandos que só o número em ADMIN_NUMERO pode usar.
-COMANDOS_ADMIN = {"liberar", "bloquear"}
+# Comandos que só o número em ADMIN_PHONE pode usar (de qualquer outro, nem parecem existir).
+COMANDOS_ADMIN = {"liberar", "negar", "bloquear", "pendentes", "usuarios"}
 
 # Comandos que a IA pode escolher numa frase livre (apagar dados só por comando explícito).
 COMANDOS_PELA_IA = COMANDOS_CONHECIDOS - {"apagar_meus_dados"}
@@ -126,14 +127,13 @@ def responder(texto: str) -> str:
     return "Não conheço esse comando. Mande /ajuda para ver a lista."
 
 
-def processar_comprovante(telefone: str, tipo: str, baixar) -> str | Resposta:
+def processar_comprovante(telefone: str, tipo: str, baixar) -> str | Resposta | None:
     """Foto ou PDF recebido: confere o acesso (antes de baixar ou gastar IA) e lê o comprovante."""
+    if not eh_admin(telefone) and status_acesso(telefone) != "ativo":
+        return None  # não liberado: nada é baixado nem enviado à IA
     garantir_usuario(telefone)
-    status = "ativo" if eh_admin(telefone) else status_acesso(telefone)
-    if status == "pendente":
-        return MSG_PENDENTE
-    if status != "ativo":
-        return MSG_INATIVO
+    if not cadastro_completo(telefone):
+        return MSG_ANTES_DO_INICIO
     conversa = ler_estado(telefone)
     if conversa is not None and conversa[0] == ESTADO_ENTRADA:
         # Depois de /entrada sem valor, o arquivo é lido como holerite.
@@ -197,20 +197,31 @@ def frase_pela_ia(telefone: str, texto: str) -> str | Resposta | None:
     return _executar_comando(telefone, nome, argumentos)
 
 
-def processar_mensagem(telefone: str, texto: str) -> str | Resposta:
-    """Cadastra o usuário na primeira mensagem, confere o acesso e devolve a resposta."""
-    novo = garantir_usuario(telefone)
+def _inicio_em_andamento(telefone: str) -> bool:
+    conversa = ler_estado(telefone)
+    return conversa is not None and conversa[0] == ESTADO_INICIO
+
+
+def processar_mensagem(telefone: str, texto: str) -> str | Resposta | None:
+    """Confere o acesso, cria a conta na primeira mensagem de quem foi liberado e devolve a resposta.
+
+    None = não responder (número não liberado)."""
     nome, argumentos = _separar(texto)
     admin = eh_admin(telefone)
     if admin and nome in COMANDOS_ADMIN:
         return comando_admin(nome, argumentos)
     status = "ativo" if admin else status_acesso(telefone)
-    if status == "pendente":
-        return comando_convite(telefone, argumentos) if nome == "convite" else MSG_PENDENTE
+    if status == "pendente" and nome == "convite":
+        return comando_convite(telefone, argumentos)
     if status != "ativo":
-        return MSG_INATIVO
+        return None  # pendente ou negado: a porta de entrada (acesso.avaliar) já cuidou do aviso
+    novo = garantir_usuario(telefone)
     if nome == "convite":
         return "Seu acesso já está ativo. Mande /ajuda para ver os comandos."
+    if not cadastro_completo(telefone):
+        permitido = nome in ("inicio", "ajuda") if texto.strip().startswith("/") else _inicio_em_andamento(telefone)
+        if not permitido:
+            return MSG_ANTES_DO_INICIO  # sem IA, sem comando: só pede o /inicio
     if texto.strip().startswith("/"):
         resposta = _executar_comando(telefone, nome, argumentos)
     else:

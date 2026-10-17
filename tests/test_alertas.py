@@ -27,7 +27,6 @@ CREATE TABLE sent_alerts (
 CREATE TABLE processed_messages (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     whatsapp_message_id TEXT, sender_phone_number TEXT NOT NULL, received_at TEXT);
-ALTER TABLE users ADD COLUMN created_at TEXT;
 """
 
 

@@ -5,6 +5,10 @@ CREATE TABLE IF NOT EXISTS users (
     access_status TEXT NOT NULL DEFAULT 'pendente'
         CHECK (access_status IN ('pendente', 'ativo', 'bloqueado')),
     access_expires_at TIMESTAMPTZ,
+    cadastro_completo BOOLEAN NOT NULL DEFAULT FALSE,
+    profile_name TEXT,
+    pending_reply_sent BOOLEAN NOT NULL DEFAULT FALSE,
+    admin_notified BOOLEAN NOT NULL DEFAULT FALSE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

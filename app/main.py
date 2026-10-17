@@ -4,9 +4,10 @@ import logging
 import os
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import HTMLResponse, PlainTextResponse
 
 from app.alertas import executar_alertas
+from app.paginas import EXCLUSAO, PRIVACIDADE
 from app.whatsapp import handle_incoming, verify_signature
 
 logging.basicConfig(level=logging.INFO)  # sem isso o log dos alertas (INFO) não aparece
@@ -24,6 +25,15 @@ async def saude() -> dict[str, str]:
     """Usada pelo Render e pelo cron-job.org para manter o serviço acordado."""
     return {"status": "ok"}
 
+
+@app.get("/privacidade", response_class=HTMLResponse)
+def pagina_privacidade() -> str:
+    return PRIVACIDADE
+
+
+@app.get("/exclusao-de-dados", response_class=HTMLResponse)
+def pagina_exclusao() -> str:
+    return EXCLUSAO
 
 @app.get("/webhook")
 def verify_webhook(

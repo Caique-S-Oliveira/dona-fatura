@@ -9,6 +9,7 @@ TEXTO_AJUDA = """Comandos da Dona Fatura:
 /grafico previsao - gráfico da previsão
 /desfazer - desfaz o último registro
 /casal /entrar CÓDIGO /grupo - usar a dois
+/sair_casal - separar as contas do casal
 /privacidade /apagar_meus_dados /ajuda"""
 
 

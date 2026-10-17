@@ -7,8 +7,10 @@ import httpx
 from dotenv import load_dotenv
 from sqlalchemy import text
 
-from app.comandos import processar_mensagem
+from app import alertas
+from app.comandos import processar_comprovante, processar_mensagem
 from app.comandos.resposta import Resposta
+from app.comandos.sair_casal import pegar_avisos
 from app.db import get_engine
 
 load_dotenv()
@@ -16,6 +18,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 GRAPH_API_URL = "https://graph.facebook.com/v21.0"
+MAX_MIDIA = 5 * 1024 * 1024  # 5 MB: limite de imagem da API do Claude
 
 
 def verify_signature(body: bytes, signature_header: str | None) -> bool:
@@ -53,7 +56,8 @@ def register_message(message_id: str, sender_phone: str) -> bool:
         return result.rowcount == 1
 
 
-def _post_message(payload: dict) -> None:
+def _post_message(payload: dict) -> str | None:
+    """Envia pela Cloud API. Devolve o id da mensagem enviada (para o registro dos alertas)."""
     token = os.getenv("WHATSAPP_TOKEN")
     phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
     if not token or not phone_number_id:
@@ -65,10 +69,49 @@ def _post_message(payload: dict) -> None:
         timeout=15,
     )
     response.raise_for_status()
+    mensagens = response.json().get("messages") or [{}]
+    return mensagens[0].get("id")
 
 
-def send_text(to: str, body: str) -> None:
-    _post_message({"to": to, "type": "text", "text": {"body": body}})
+def send_text(to: str, body: str) -> str | None:
+    return _post_message({"to": to, "type": "text", "text": {"body": body}})
+
+
+def send_template(to: str, nome: str, parametros: list[str], idioma: str = "pt_BR") -> str | None:
+    """Mensagem por modelo (template) aprovado; vale também fora da janela de 24h."""
+    return _post_message({
+        "to": to,
+        "type": "template",
+        "template": {
+            "name": nome,
+            "language": {"code": idioma},
+            "components": [{
+                "type": "body",
+                "parameters": [{"type": "text", "text": valor} for valor in parametros],
+            }],
+        },
+    })
+
+
+def send_image(to: str, png: bytes, legenda: str) -> None:
+    """Sobe o PNG na rota /media da API e envia pelo id da mídia."""
+    token = os.getenv("WHATSAPP_TOKEN")
+    phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    if not token or not phone_number_id:
+        raise RuntimeError("WHATSAPP_TOKEN ou WHATSAPP_PHONE_NUMBER_ID não definidos.")
+    upload = httpx.post(
+        f"{GRAPH_API_URL}/{phone_number_id}/media",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"messaging_product": "whatsapp", "type": "image/png"},
+        files={"file": ("grafico.png", png, "image/png")},
+        timeout=30,
+    )
+    upload.raise_for_status()
+    _post_message({
+        "to": to,
+        "type": "image",
+        "image": {"id": upload.json()["id"], "caption": legenda[:1024]},
+    })
 
 
 def send_buttons(to: str, body: str, buttons: tuple[str, ...]) -> None:
@@ -105,14 +148,16 @@ def send_list(to: str, resposta: Resposta) -> None:
             "body": {"text": resposta.texto[:1024]},
             "action": {
                 "button": resposta.botao_lista[:20],
-                "sections": [{"title": "Categorias", "rows": linhas}],
+                "sections": [{"title": resposta.titulo_lista[:24], "rows": linhas}],
             },
         },
     })
 
 
 def send_reply(to: str, resposta: str | Resposta) -> None:
-    if isinstance(resposta, Resposta) and resposta.lista:
+    if isinstance(resposta, Resposta) and resposta.imagem:
+        send_image(to, resposta.imagem, resposta.texto)
+    elif isinstance(resposta, Resposta) and resposta.lista:
         send_list(to, resposta)
     elif isinstance(resposta, Resposta) and resposta.botoes:
         send_buttons(to, resposta.texto, resposta.botoes)
@@ -135,6 +180,42 @@ def message_text(message: dict) -> str | None:
     return None
 
 
+def message_media(message: dict) -> tuple[str, str] | None:
+    """(id da mídia, tipo MIME) se for foto ou documento; None para o resto."""
+    if message.get("type") not in ("image", "document"):
+        return None
+    midia = message.get(message["type"], {})
+    if not midia.get("id"):
+        return None
+    return midia["id"], midia.get("mime_type", "")
+
+
+def download_media(media_id: str) -> bytes | None:
+    """Baixa o arquivo da Meta (só na memória). None se for grande demais ou der erro."""
+    token = os.getenv("WHATSAPP_TOKEN")
+    if not token:
+        raise RuntimeError("WHATSAPP_TOKEN não definido.")
+    headers = {"Authorization": f"Bearer {token}"}
+    info = httpx.get(f"{GRAPH_API_URL}/{media_id}", headers=headers, timeout=15)
+    info.raise_for_status()
+    dados = info.json()
+    if int(dados.get("file_size", 0)) > MAX_MIDIA:
+        return None
+    arquivo = httpx.get(dados["url"], headers=headers, timeout=30)
+    arquivo.raise_for_status()
+    return arquivo.content if len(arquivo.content) <= MAX_MIDIA else None
+
+
+def entregar_avisos(destino: str) -> None:
+    """Avisos que ficaram esperando (ex.: o parceiro saiu do casal). A mensagem que acabou de
+    chegar reabre a janela de 24h, então agora dá para enviar texto livre."""
+    try:
+        for aviso in pegar_avisos(destino):
+            send_text(destino, aviso)
+    except Exception:
+        logger.exception("Erro ao entregar avisos pendentes")
+
+
 def handle_incoming(payload: dict) -> None:
     """Processa o webhook depois de a resposta 200 já ter sido enviada."""
     for message in extract_messages(payload):
@@ -145,8 +226,18 @@ def handle_incoming(payload: dict) -> None:
                 continue
             if not register_message(message_id, sender):
                 continue  # mensagem repetida
+            entregar_avisos(sender)
+            alertas.abrir_fila()
             texto = message_text(message)
+            midia = message_media(message)
             if texto is not None:
                 send_reply(sender, processar_mensagem(sender, texto))
+            elif midia is not None:
+                id_midia, tipo = midia
+                send_reply(
+                    sender,
+                    processar_comprovante(sender, tipo, lambda: download_media(id_midia)),
+                )
+            alertas.enviar_alertas_de_gasto()  # só depois da confirmação já ter sido enviada
         except Exception:
             logger.exception("Erro ao processar mensagem do WhatsApp")

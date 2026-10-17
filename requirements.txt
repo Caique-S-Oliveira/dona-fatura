@@ -5,3 +5,4 @@ psycopg[binary]
 python-dotenv
 httpx
 anthropic
+matplotlib==3.11.2

@@ -3,6 +3,7 @@ from decimal import Decimal
 from sqlalchemy import text
 
 from app.comandos.cadastro import conta_do_usuario
+from app.comandos.casal import conta_em_casal
 from app.comandos.estado import limpar_estado, salvar_estado
 from app.comandos.formato import formatar_pct, ler_numero, normalizar
 from app.comandos.metas import (
@@ -130,10 +131,11 @@ def proximo_passo(dados: dict, texto: str) -> tuple[str, dict]:
     return "Vamos recomeçar. Como você quer ser chamado(a)?", {"passo": "nome"}
 
 
-def mensagem_final(dados: dict) -> str:
+def mensagem_final(dados: dict, casal: bool = False) -> str:
     metas = _metas(dados)
     renda = Decimal(dados["renda"])
-    partes = [f"Pronto, {dados['nome']}! Suas metas:", linhas_metas(metas, renda)]
+    titulo = "Suas metas (só suas; as do casal ficam em /metas):" if casal else "Suas metas:"
+    partes = [f"Pronto, {dados['nome']}! {titulo}", linhas_metas(metas, renda)]
     aviso = aviso_acima_da_renda(metas, renda)
     if aviso:
         partes.append(aviso)
@@ -141,9 +143,14 @@ def mensagem_final(dados: dict) -> str:
     return "\n".join(partes) + "\n\n" + MSG_PRIVACIDADE
 
 
-def gravar_inicio(telefone: str, dados: dict) -> None:
-    """Grava nome, renda e metas de uma vez só (nada é salvo antes do fim)."""
+def gravar_inicio(telefone: str, dados: dict) -> bool:
+    """Grava nome, renda e metas de uma vez só (nada é salvo antes do fim).
+
+    No casal as metas daqui são individuais, para não apagar as metas do casal.
+    Devolve True se a conta é de casal.
+    """
     user_id, account_id = conta_do_usuario(telefone)
+    casal = conta_em_casal(account_id)
     with get_engine().begin() as connection:
         connection.execute(
             text("UPDATE users SET display_name = :nome WHERE id = :usuario"),
@@ -156,7 +163,8 @@ def gravar_inicio(telefone: str, dados: dict) -> None:
             ),
             {"renda": Decimal(dados["renda"]), "conta": account_id, "usuario": user_id},
         )
-        substituir_metas(connection, account_id, _metas(dados))
+        substituir_metas(connection, account_id, _metas(dados), user_id if casal else None)
+    return casal
 
 
 def continuar_inicio(telefone: str, dados: dict, texto: str) -> str:
@@ -164,6 +172,6 @@ def continuar_inicio(telefone: str, dados: dict, texto: str) -> str:
     if dados["passo"] != "fim":
         salvar_estado(telefone, ESTADO, dados)
         return resposta
-    gravar_inicio(telefone, dados)
+    casal = gravar_inicio(telefone, dados)
     limpar_estado(telefone)
-    return mensagem_final(dados)
+    return mensagem_final(dados, casal)

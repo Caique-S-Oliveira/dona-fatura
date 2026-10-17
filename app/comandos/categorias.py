@@ -348,8 +348,9 @@ def continuar_nova(telefone: str, dados: dict, texto: str) -> str | Resposta:
     resposta = f"Categoria {dados['nome']} ({tipo}) criada."
     if dados.get("retorno"):
         # import aqui dentro porque gasto.py também importa este arquivo
-        from app.comandos.gasto import registrar
+        from app.comandos.gasto import finalizar_registro, registrar
 
         categoria = Categoria(categoria_id, dados["nome"], tipo)
         resposta += "\n" + registrar(account_id, user_id, dados["retorno"], categoria)
+        return finalizar_registro(telefone, account_id, user_id, dados["retorno"], categoria, resposta)
     return resposta

@@ -1,10 +1,12 @@
 import re
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import text
 
 from app import ia
 from app.comandos.cadastro import conta_do_usuario
+from app.comandos.casal import deve_perguntar_escopo
 from app.comandos.categorias import (
     Categoria,
     achar_categoria,
@@ -18,12 +20,14 @@ from app.comandos.categorias import (
 )
 from app.comandos.estado import limpar_estado, salvar_estado
 from app.comandos.formato import eh_nao, eh_sim, formatar_reais, ler_numero, normalizar
+from app.comandos.recorrentes import verificar_recorrente
 from app.comandos.resposta import Resposta
 from app.db import get_engine
 
 ESTADO = "gasto"
 BOTOES = ("Sim", "Corrigir")
 BOTOES_CORRIGIR = ("Valor", "Categoria")
+BOTOES_ESCOPO = ("Meu", "Conjunto")
 FORMATO = "Use: /gasto 45,90 mercado"
 
 # "gastei 45 no mercado", "paguei R$ 30,50 de uber", "comprei 12 reais de pão"
@@ -38,14 +42,24 @@ PALAVRAS_DE_GASTO = ("gastei", "paguei", "comprei", "torrei", "gasto", "gastamos
 Gasto = tuple[Decimal, str, str]  # (valor, descrição, escopo)
 
 
+SUFIXOS_MEU = ("meu", "minha")
+SUFIXOS_CONJUNTO = ("casal", "conjunto")
+
+
 def separar_escopo(descricao: str) -> tuple[str, str]:
     """"padaria meu" -> ("padaria", "meu"). Sem sufixo, o gasto é "conjunto"."""
     palavras = descricao.split()
-    if len(palavras) >= 2 and normalizar(palavras[-1]) in ("meu", "minha"):
+    if len(palavras) >= 2 and normalizar(palavras[-1]) in SUFIXOS_MEU:
         return " ".join(palavras[:-1]), "meu"
-    if len(palavras) >= 2 and normalizar(palavras[-1]) in ("casal", "conjunto"):
+    if len(palavras) >= 2 and normalizar(palavras[-1]) in SUFIXOS_CONJUNTO:
         return " ".join(palavras[:-1]), "conjunto"
     return descricao.strip(), "conjunto"
+
+
+def tem_sufixo_de_escopo(descricao: str) -> bool:
+    """O usuário escreveu "meu" ou "casal" no fim? Aí não precisa perguntar [Meu] [Conjunto]."""
+    palavras = descricao.split()
+    return len(palavras) >= 2 and normalizar(palavras[-1]) in SUFIXOS_MEU + SUFIXOS_CONJUNTO
 
 
 def _montar(valor: Decimal | None, descricao: str) -> Gasto | None:
@@ -114,9 +128,10 @@ def gravar_gasto(account_id, user_id, dados: dict, categoria_id: str) -> None:
         connection.execute(
             text(
                 "INSERT INTO transactions (account_id, created_by_user_id, category_id,"
-                " transaction_type, amount, description, transaction_date, scope, source)"
-                " VALUES (:conta, :usuario, :categoria, 'expense', :valor, :descricao,"
-                " (now() AT TIME ZONE 'America/Sao_Paulo')::date, :escopo, 'manual')"
+                " transaction_type, amount, description, payee, transaction_date, scope, source)"
+                " VALUES (:conta, :usuario, :categoria, 'expense', :valor, :descricao, :favorecido,"
+                " COALESCE(CAST(:data AS date), (now() AT TIME ZONE 'America/Sao_Paulo')::date),"
+                " :escopo, :fonte)"
             ),
             {
                 "conta": account_id,
@@ -124,7 +139,10 @@ def gravar_gasto(account_id, user_id, dados: dict, categoria_id: str) -> None:
                 "categoria": categoria_id,
                 "valor": Decimal(dados["valor"]),
                 "descricao": dados["descricao"],
+                "favorecido": dados.get("favorecido"),
+                "data": dados.get("data"),  # "AAAA-MM-DD" do comprovante; sem data = hoje
                 "escopo": dados["escopo"],
+                "fonte": dados.get("fonte", "manual"),
             },
         )
 
@@ -150,7 +168,10 @@ def salvar_regra(account_id, user_id, descricao: str, categoria_id: str) -> None
 
 def _cabecalho(dados: dict) -> str:
     privado = " (só seu)" if dados["escopo"] == "meu" else ""
-    return f"Gasto de {formatar_reais(Decimal(dados['valor']))} — {dados['descricao']}{privado}."
+    data = ""
+    if dados.get("data"):
+        data = f", {date.fromisoformat(dados['data']).strftime('%d/%m/%Y')}"
+    return f"Gasto de {formatar_reais(Decimal(dados['valor']))} — {dados['descricao']}{data}{privado}."
 
 
 def _lista_categorias(telefone: str, dados: dict, pagina: int | None, aviso: str = "") -> Resposta:
@@ -172,25 +193,43 @@ def _pergunta_confirmar(dados: dict) -> Resposta:
     )
 
 
-def iniciar_gasto(telefone: str, gasto: Gasto) -> str | Resposta:
+def _pergunta_escopo(dados: dict) -> Resposta:
+    return Resposta(f"{_cabecalho(dados)}\nÉ um gasto seu ou do casal?", BOTOES_ESCOPO)
+
+
+def sugerir_e_confirmar(telefone: str, account_id, dados: dict) -> str | Resposta:
     """Sugere a categoria e pede confirmação (nada é salvo ainda)."""
-    valor, descricao, escopo = gasto
-    _, account_id = conta_do_usuario(telefone)
     categorias = listar_categorias(account_id)
-    dados = {"valor": str(valor), "descricao": descricao, "escopo": escopo}
-    sugestao = sugerir(account_id, descricao, categorias)
+    sugestao = sugerir(account_id, dados["descricao"], categorias)
     if sugestao is None:
         return _lista_categorias(telefone, dados, None)
-    dados.update(passo="confirmar", categoria_id=sugestao.id, categoria_nome=sugestao.nome)
+    dados = {**dados, "passo": "confirmar", "categoria_id": sugestao.id, "categoria_nome": sugestao.nome}
     salvar_estado(telefone, ESTADO, dados)
     return _pergunta_confirmar(dados)
+
+
+def comecar_gasto(telefone: str, account_id, dados: dict, escopo_explicito: bool) -> str | Resposta:
+    """No casal "com gastos pessoais", pergunta [Meu] [Conjunto] antes (a menos que o usuário
+    tenha escrito "meu"/"casal"). Nos outros casos vai direto para a categoria."""
+    if not escopo_explicito and deve_perguntar_escopo(account_id):
+        dados = {**dados, "passo": "escopo"}
+        salvar_estado(telefone, ESTADO, dados)
+        return _pergunta_escopo(dados)
+    return sugerir_e_confirmar(telefone, account_id, dados)
+
+
+def iniciar_gasto(telefone: str, gasto: Gasto, escopo_explicito: bool = True) -> str | Resposta:
+    valor, descricao, escopo = gasto
+    _, account_id = conta_do_usuario(telefone)
+    dados = {"valor": str(valor), "descricao": descricao, "escopo": escopo}
+    return comecar_gasto(telefone, account_id, dados, escopo_explicito)
 
 
 def comando_gasto(telefone: str, argumentos: str) -> str | Resposta:
     gasto = ler_comando(argumentos)
     if gasto is None:
         return f"Não entendi o gasto. {FORMATO}"
-    return iniciar_gasto(telefone, gasto)
+    return iniciar_gasto(telefone, gasto, tem_sufixo_de_escopo(argumentos))
 
 
 def frase_de_gasto(telefone: str, texto: str) -> str | Resposta | None:
@@ -199,25 +238,42 @@ def frase_de_gasto(telefone: str, texto: str) -> str | Resposta | None:
     Devolve None se a frase não for sobre gasto.
     """
     gasto = ler_frase(texto)
+    explicito = tem_sufixo_de_escopo(texto)
     if gasto is None and parece_gasto(texto):
         extraido = ia.entender_gasto(texto)
         if extraido:
             gasto = _montar(ler_numero(extraido["valor"]), extraido["descricao"])
+            explicito = tem_sufixo_de_escopo(extraido["descricao"])
         if gasto is None:
             return f"Não entendi o gasto. {FORMATO}"
     if gasto is None:
         return None
-    return iniciar_gasto(telefone, gasto)
+    return iniciar_gasto(telefone, gasto, explicito)
 
 
 def registrar(account_id, user_id, dados: dict, categoria: Categoria) -> str:
     """Grava o gasto na categoria escolhida. Se mudou da sugestão, aprende a regra."""
     gravar_gasto(account_id, user_id, dados, categoria.id)
     resposta = f"Anotado: {formatar_reais(Decimal(dados['valor']))} em {categoria.nome}."
-    if categoria.id != dados.get("categoria_id"):
+    if categoria.id != dados.get("categoria_id") and dados.get("aprender", True):
         salvar_regra(account_id, user_id, dados["descricao"], categoria.id)
         resposta += f"\nAprendi: \"{dados['descricao']}\" vai para {categoria.nome}."
     return resposta
+
+
+def finalizar_registro(
+    telefone: str, account_id, user_id, dados: dict, categoria: Categoria, resposta: str
+) -> str | Resposta:
+    """Fecha a conversa do gasto; se a conta parecer recorrente, acrescenta a pergunta com botões."""
+    limpar_estado(telefone)
+    from app import alertas  # import tardio: alertas usa os comandos
+
+    alertas.preparar_alerta_gasto(telefone, account_id, user_id, dados, categoria)
+    pergunta = verificar_recorrente(telefone, account_id, user_id, dados, categoria)
+    if pergunta is None:
+        return resposta
+    pergunta.texto = f"{resposta}\n{pergunta.texto}"
+    return pergunta
 
 
 def continuar_gasto(telefone: str, dados: dict, texto: str) -> str | Resposta:
@@ -225,12 +281,20 @@ def continuar_gasto(telefone: str, dados: dict, texto: str) -> str | Resposta:
     passo = dados.get("passo")
     escolha = normalizar(texto).strip(" .!")
 
+    if passo == "escopo":
+        if escolha in SUFIXOS_MEU:
+            return sugerir_e_confirmar(telefone, account_id, {**dados, "escopo": "meu"})
+        if escolha in SUFIXOS_CONJUNTO:
+            return sugerir_e_confirmar(telefone, account_id, {**dados, "escopo": "conjunto"})
+        resposta = _pergunta_escopo(dados)
+        resposta.texto = "Toque em Meu ou Conjunto.\n" + resposta.texto
+        return resposta
+
     if passo == "confirmar":
         if eh_sim(texto):
             categoria = Categoria(dados["categoria_id"], dados["categoria_nome"], "")
             resposta = registrar(account_id, user_id, dados, categoria)
-            limpar_estado(telefone)
-            return resposta
+            return finalizar_registro(telefone, account_id, user_id, dados, categoria, resposta)
         if eh_nao(texto) or escolha == "corrigir":
             salvar_estado(telefone, ESTADO, {**dados, "passo": "corrigir"})
             return _pergunta_corrigir()
@@ -264,8 +328,7 @@ def continuar_gasto(telefone: str, dados: dict, texto: str) -> str | Resposta:
     tipo, valor = entendido
     if tipo == "categoria":
         resposta = registrar(account_id, user_id, dados, valor)
-        limpar_estado(telefone)
-        return resposta
+        return finalizar_registro(telefone, account_id, user_id, dados, valor, resposta)
     if valor == "nova":
         return iniciar_nova(telefone, retorno=dados)
     return _lista_categorias(telefone, dados, proxima_pagina(pagina))

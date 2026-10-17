@@ -24,6 +24,16 @@ from app.comandos.gasto import continuar_gasto, ler_comando, ler_frase, parece_g
 from app.comandos.resposta import Resposta
 from app.whatsapp import message_text, send_list
 
+_sem_recorrente = patch("app.comandos.gasto.verificar_recorrente", return_value=None)
+
+
+def setUpModule():
+    _sem_recorrente.start()  # a detecção de recorrentes consulta o banco; tem testes próprios
+
+
+def tearDownModule():
+    _sem_recorrente.stop()
+
 USUARIO = "5511988887777"
 CATEGORIAS = [Categoria(str(i), nome, tipo) for i, (nome, tipo) in enumerate(PADRAO.items(), 1)]
 CONTA = ("usuario-1", "conta-1")
@@ -141,6 +151,7 @@ class TestListaDeCategorias(unittest.TestCase):
 @patch("app.comandos.gasto.abrir_lista", side_effect=lista_falsa)
 @patch("app.comandos.gasto.listar_categorias", return_value=CATEGORIAS)
 @patch("app.comandos.gasto.conta_do_usuario", return_value=CONTA)
+@patch("app.comandos.gasto.deve_perguntar_escopo", new=lambda account_id: False)  # sem casal, sem banco
 class TestFluxoGasto(unittest.TestCase):
     @patch("app.comandos.gasto.ia.sugerir_categoria")
     @patch("app.comandos.gasto.regra_aprendida", return_value=None)
@@ -181,8 +192,9 @@ class TestFluxoGasto(unittest.TestCase):
         self.assertIn("R$ 50,00", resposta.texto)
         self.assertIn("Restaurante", resposta.texto)
 
+    @patch("app.comandos.ia.identificar_comando", return_value=None)
     @patch("app.comandos.gasto.ia.entender_gasto")
-    def test_frase_comum_nao_chama_ia(self, entender, *_):
+    def test_frase_comum_nao_chama_ia(self, entender, _comando, *_):
         self.assertIn("/ajuda", processar_mensagem(USUARIO, "bom dia"))
         entender.assert_not_called()
 

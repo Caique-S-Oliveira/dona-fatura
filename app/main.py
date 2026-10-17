@@ -1,10 +1,15 @@
+import hmac
 import json
+import logging
 import os
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import PlainTextResponse
 
+from app.alertas import executar_alertas
 from app.whatsapp import handle_incoming, verify_signature
+
+logging.basicConfig(level=logging.INFO)  # sem isso o log dos alertas (INFO) não aparece
 
 app = FastAPI()
 
@@ -38,4 +43,20 @@ async def receive_webhook(
     except ValueError:
         raise HTTPException(status_code=400, detail="JSON inválido")
     background_tasks.add_task(handle_incoming, payload)
+    return {"status": "ok"}
+
+
+@app.api_route("/cron", methods=["GET", "POST"])
+def cron(
+    request: Request,
+    background_tasks: BackgroundTasks,
+    forcar: bool = False,
+) -> dict[str, str]:
+    """Chamada pelo cron-job.org com o cabeçalho X-Cron-Secret. Responde na hora e envia os
+    alertas em segundo plano. `forcar=1` ignora a regra das 10h (para testar)."""
+    segredo = os.getenv("CRON_SECRET")
+    enviado = request.headers.get("X-Cron-Secret", "")
+    if not segredo or not hmac.compare_digest(enviado, segredo):
+        raise HTTPException(status_code=403, detail="Segredo inválido")
+    background_tasks.add_task(executar_alertas, forcar)
     return {"status": "ok"}

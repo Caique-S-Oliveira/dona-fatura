@@ -1,5 +1,6 @@
 from dataclasses import replace
 
+from app import ia
 from app.comandos.acesso import (
     MSG_INATIVO,
     MSG_PENDENTE,
@@ -10,6 +11,8 @@ from app.comandos.acesso import (
 )
 from app.comandos.ajuda import comando_ajuda
 from app.comandos.cadastro import garantir_usuario
+from app.comandos.casal import ESTADO as ESTADO_CASAL
+from app.comandos.casal import comando_casal, comando_entrar, continuar_casal
 from app.comandos.categorias import ESTADO as ESTADO_CATEGORIAS
 from app.comandos.categorias import (
     ESTADO_NOVA,
@@ -17,20 +20,49 @@ from app.comandos.categorias import (
     continuar_categorias,
     continuar_nova,
 )
+from app.comandos.comprovante import receber_comprovante
 from app.comandos.desfazer import ESTADO as ESTADO_DESFAZER
 from app.comandos.desfazer import comando_desfazer, continuar_desfazer
+from app.comandos.diagnostico import comando_diagnostico
+from app.comandos.entrada import ESTADO as ESTADO_ENTRADA
+from app.comandos.entrada import comando_entrada, continuar_entrada, receber_holerite
 from app.comandos.estado import ler_estado, limpar_estado
+from app.comandos.fixos import comando_fixos
 from app.comandos.formato import normalizar
 from app.comandos.gasto import ESTADO as ESTADO_GASTO
 from app.comandos.gasto import comando_gasto, continuar_gasto, frase_de_gasto
 from app.comandos.inicio import ESTADO as ESTADO_INICIO
 from app.comandos.inicio import comando_inicio, continuar_inicio
 from app.comandos.metas import comando_metas
+from app.comandos.objetivos import ESTADO as ESTADO_OBJETIVO
+from app.comandos.objetivos import ESTADO_GERIR as ESTADO_OBJETIVO_GERIR
+from app.comandos.objetivos import (
+    comando_objetivos,
+    continuar_gerir as continuar_objetivo_gerir,
+    continuar_objetivo,
+    frase_de_aporte,
+)
+from app.comandos.parcelas import ESTADO as ESTADO_PARCELA
+from app.comandos.parcelas import ESTADO_GERIR as ESTADO_PARCELA_GERIR
+from app.comandos.parcelas import (
+    comando_parcelas,
+    continuar_gerir as continuar_parcela_gerir,
+    continuar_parcela,
+)
+from app.comandos.previsao import comando_grafico, comando_previsao
+from app.comandos.privacidade import ESTADO as ESTADO_APAGAR
+from app.comandos.privacidade import comando_apagar, comando_privacidade, continuar_apagar
+from app.comandos.recorrentes import ESTADO as ESTADO_RECORRENTE
+from app.comandos.recorrentes import continuar_recorrente
 from app.comandos.resposta import Resposta
+from app.comandos.sair_casal import ESTADO as ESTADO_SAIR_CASAL
+from app.comandos.sair_casal import comando_sair_casal, continuar_sair_casal
+from app.comandos.resumo import comando_resumo
 
 # Comandos já implementados: nome -> função(argumentos) que devolve a resposta.
 COMANDOS = {
     "ajuda": comando_ajuda,
+    "privacidade": comando_privacidade,
 }
 
 # Comandos que precisam saber quem mandou: nome -> função(telefone, argumentos).
@@ -38,19 +70,34 @@ COMANDOS_COM_USUARIO = {
     "inicio": comando_inicio,
     "metas": comando_metas,
     "gasto": comando_gasto,
+    "entrada": comando_entrada,
     "categorias": comando_categorias,
     "desfazer": comando_desfazer,
+    "resumo": comando_resumo,
+    "fixos": comando_fixos,
+    "previsao": comando_previsao,
+    "diagnostico": comando_diagnostico,
+    "objetivos": comando_objetivos,
+    "parcelas": comando_parcelas,
+    "grafico": comando_grafico,
+    "apagar_meus_dados": comando_apagar,
+    "casal": comando_casal,
+    "entrar": comando_entrar,
+    "sair_casal": comando_sair_casal,
 }
 
 # Todos os comandos previstos no CLAUDE.md (os que faltam respondem "Ainda estou aprendendo isso").
 COMANDOS_CONHECIDOS = {
     "inicio", "metas", "resumo", "gasto", "entrada", "categorias", "fixos",
     "previsao", "diagnostico", "objetivos", "parcelas", "desfazer", "privacidade",
-    "apagar_meus_dados", "ajuda", "grafico", "casal", "entrar", "grupo",
+    "apagar_meus_dados", "ajuda", "grafico", "casal", "entrar", "grupo", "sair_casal",
 }
 
 # Comandos que só o número em ADMIN_NUMERO pode usar.
 COMANDOS_ADMIN = {"liberar", "bloquear"}
+
+# Comandos que a IA pode escolher numa frase livre (apagar dados só por comando explícito).
+COMANDOS_PELA_IA = COMANDOS_CONHECIDOS - {"apagar_meus_dados"}
 
 BOAS_VINDAS = "Oi, eu sou a Dona Fatura! Vou cuidar das suas contas com você."
 
@@ -79,6 +126,22 @@ def responder(texto: str) -> str:
     return "Não conheço esse comando. Mande /ajuda para ver a lista."
 
 
+def processar_comprovante(telefone: str, tipo: str, baixar) -> str | Resposta:
+    """Foto ou PDF recebido: confere o acesso (antes de baixar ou gastar IA) e lê o comprovante."""
+    garantir_usuario(telefone)
+    status = "ativo" if eh_admin(telefone) else status_acesso(telefone)
+    if status == "pendente":
+        return MSG_PENDENTE
+    if status != "ativo":
+        return MSG_INATIVO
+    conversa = ler_estado(telefone)
+    if conversa is not None and conversa[0] == ESTADO_ENTRADA:
+        # Depois de /entrada sem valor, o arquivo é lido como holerite.
+        return receber_holerite(telefone, tipo, baixar)
+    limpar_estado(telefone)  # um arquivo novo cancela a conversa em andamento
+    return receber_comprovante(telefone, tipo, baixar)
+
+
 def _continuar_conversa(telefone: str, texto: str) -> str | Resposta | None:
     """Se houver uma conversa em andamento (ex.: /inicio), trata a resposta nela."""
     conversa = ler_estado(telefone)
@@ -93,9 +156,45 @@ def _continuar_conversa(telefone: str, texto: str) -> str | Resposta | None:
         return continuar_nova(telefone, dados, texto)
     if estado == ESTADO_GASTO:
         return continuar_gasto(telefone, dados, texto)
+    if estado == ESTADO_ENTRADA:
+        return continuar_entrada(telefone, dados, texto)
     if estado == ESTADO_DESFAZER:
         return continuar_desfazer(telefone, dados, texto)
+    if estado == ESTADO_RECORRENTE:
+        return continuar_recorrente(telefone, dados, texto)
+    if estado == ESTADO_OBJETIVO:
+        return continuar_objetivo(telefone, dados, texto)
+    if estado == ESTADO_PARCELA:
+        return continuar_parcela(telefone, dados, texto)
+    if estado == ESTADO_OBJETIVO_GERIR:
+        return continuar_objetivo_gerir(telefone, dados, texto)
+    if estado == ESTADO_PARCELA_GERIR:
+        return continuar_parcela_gerir(telefone, dados, texto)
+    if estado == ESTADO_APAGAR:
+        return continuar_apagar(telefone, dados, texto)
+    if estado == ESTADO_CASAL:
+        return continuar_casal(telefone, dados, texto)
+    if estado == ESTADO_SAIR_CASAL:
+        return continuar_sair_casal(telefone, dados, texto)
     return None
+
+
+def _executar_comando(telefone: str, nome: str, argumentos: str) -> str | Resposta:
+    limpar_estado(telefone)  # um comando novo cancela a conversa em andamento
+    if nome in COMANDOS_COM_USUARIO:
+        return COMANDOS_COM_USUARIO[nome](telefone, argumentos)
+    return responder(f"/{nome} {argumentos}")
+
+
+def frase_pela_ia(telefone: str, texto: str) -> str | Resposta | None:
+    """Frase livre que nenhuma regra entendeu: a IA diz qual comando é. None se não souber."""
+    entendido = ia.identificar_comando(texto)
+    if entendido is None:
+        return None
+    nome, argumentos = entendido
+    if nome not in COMANDOS_PELA_IA:
+        return None
+    return _executar_comando(telefone, nome, argumentos)
 
 
 def processar_mensagem(telefone: str, texto: str) -> str | Resposta:
@@ -113,15 +212,13 @@ def processar_mensagem(telefone: str, texto: str) -> str | Resposta:
     if nome == "convite":
         return "Seu acesso já está ativo. Mande /ajuda para ver os comandos."
     if texto.strip().startswith("/"):
-        limpar_estado(telefone)  # um comando novo cancela a conversa em andamento
-        if nome in COMANDOS_COM_USUARIO:
-            resposta = COMANDOS_COM_USUARIO[nome](telefone, argumentos)
-        else:
-            resposta = responder(texto)
+        resposta = _executar_comando(telefone, nome, argumentos)
     else:
         resposta = (
             _continuar_conversa(telefone, texto)
+            or frase_de_aporte(telefone, texto)
             or frase_de_gasto(telefone, texto)
+            or frase_pela_ia(telefone, texto)
             or responder(texto)
         )
     if novo:

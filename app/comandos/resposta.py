@@ -13,3 +13,5 @@ class Resposta:
     botoes: tuple[str, ...] = ()
     lista: tuple[tuple[str, str, str], ...] = ()
     botao_lista: str = "Escolher"
+    titulo_lista: str = "Categorias"  # título da seção da lista (até 24 letras)
+    imagem: bytes | None = None  # PNG; o texto vira a legenda

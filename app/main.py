@@ -19,6 +19,12 @@ def health_check() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.api_route("/saude", methods=["GET", "HEAD"])
+async def saude() -> dict[str, str]:
+    """Usada pelo Render e pelo cron-job.org para manter o serviço acordado."""
+    return {"status": "ok"}
+
+
 @app.get("/webhook")
 def verify_webhook(
     mode: str | None = Query(None, alias="hub.mode"),

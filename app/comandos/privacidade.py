@@ -9,10 +9,12 @@ from app.db import get_engine
 ESTADO = "apagar"
 BOTOES = ("Apagar tudo", "Cancelar")
 
-TEXTO_PRIVACIDADE = """O que eu guardo: seu número, nome, renda, metas e os registros que você confirma (valor, data, favorecido, categoria).
-Fotos e PDFs eu descarto depois de ler. Para ler, a imagem ou a frase é enviada à IA (Anthropic) uma única vez.
-Quem acessa: só você vê seus dados pelo WhatsApp, mas quem administra o banco de dados (Supabase) e o bot consegue ver tudo. Não prometo criptografia além do que esses serviços já oferecem.
-Para apagar tudo: /apagar_meus_dados"""
+TEXTO_PRIVACIDADE = (
+    "🔒 Seus dados ficam num banco protegido por senha e servem só para gerar seus resumos. "
+    "Não vendo nem compartilho com ninguém. O acesso técnico ao banco é só do responsável pelo projeto, "
+    "que não olha seus dados a não ser que você peça ajuda. No casal, seu parceiro só vê o que for conjunto. "
+    "Para apagar tudo, mande /apagar_meus_dados."
+)
 
 TEXTO_APAGADO = (
     "Pronto, apaguei seus registros, metas, categorias, renda e nome. "

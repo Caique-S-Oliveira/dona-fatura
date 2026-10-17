@@ -22,7 +22,7 @@ def get_engine() -> Engine:
             "postgresql://", "postgresql+psycopg://", 1
         )
 
-    return create_engine(database_url, pool_pre_ping=True)
+    return create_engine(database_url, pool_pre_ping=True, hide_parameters=True)
 
 
 def test_connection() -> None:

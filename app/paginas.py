@@ -40,12 +40,12 @@ Guardamos apenas valor, data, favorecido e categoria.</p>
 <li>Anthropic (IA): recebe a imagem, o PDF ou a frase apenas para interpretá-los.</li>
 <li>Supabase (banco de dados) e Render (hospedagem): onde os dados ficam armazenados.</li>
 </ul>
-<p>Não vendemos nem compartilhamos seus dados com terceiros para publicidade.</p>
+<p>Não vendemos nem compartilhamos seus dados com ninguém.</p>
 
 <h2>Quem tem acesso</h2>
-<p>Pelo WhatsApp, só você (e seu parceiro, no modo casal). Porém, quem administra o banco de
-dados e o bot consegue ver os dados armazenados. Não prometemos criptografia além da oferecida
-pelos serviços acima.</p>
+<p>Seus dados ficam num banco protegido por senha e servem só para gerar seus resumos. O acesso
+técnico ao banco é só do responsável pelo projeto, que não olha seus dados a não ser que você peça
+ajuda. No casal, seu parceiro só vê o que for conjunto.</p>
 
 <h2>Seus direitos</h2>
 <p>Você pode apagar seus dados a qualquer momento com o comando /apagar_meus_dados, ou pedir

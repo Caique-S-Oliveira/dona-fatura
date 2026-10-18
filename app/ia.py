@@ -165,7 +165,7 @@ SISTEMA_COMANDO = (
     "uma frase em português do Brasil. Comandos: resumo (resumo do mês; argumento \"semana\" "
     "para a semana), gasto (argumento: valor e descrição), entrada (argumento: valor e "
     "descrição), metas, categorias, fixos, previsao (previsão do fim do mês), diagnostico, "
-    "objetivos, parcelas, desfazer, privacidade, inicio, ajuda. "
+    "objetivos, parcelas, pagar (argumento: nome da parcela), desfazer, privacidade, inicio, ajuda. "
     'Responda só com JSON: {"comando": "resumo", "argumentos": "semana"}. '
     "Só escolha um comando se a intenção for clara. Cumprimentos, agradecimentos e conversa "
     'em geral não são comandos. Se a frase não pedir nenhum desses, responda {"comando": null}. '

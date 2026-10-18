@@ -21,6 +21,7 @@ Também vale escrever: "gastei 45 no mercado" ou mandar a foto/PDF do comprovant
 /categorias - ver e criar categorias
 /objetivos - poupança (nome, valor, prazo)
 /parcelas - compras parceladas
+/pagar - pagar uma parcela (ex.: /pagar carro)
 
 *A dois*
 /casal - gera um código para o parceiro

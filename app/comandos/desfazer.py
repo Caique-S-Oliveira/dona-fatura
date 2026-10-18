@@ -58,7 +58,18 @@ def continuar_desfazer(telefone: str, dados: dict, texto: str) -> str | Resposta
             ),
             {"id": dados["id"], "conta": account_id, "usuario": user_id},
         ).rowcount
+        parcela_voltou = 0
+        if apagados:  # se era o pagamento de uma parcela, volta a contagem de parcelas pagas
+            parcela_voltou = connection.execute(
+                text(
+                    "UPDATE installments SET paid_installments = paid_installments - 1,"
+                    " last_payment_id = NULL WHERE last_payment_id = :id"
+                    " AND account_id = :conta AND paid_installments > 0"
+                ),
+                {"id": dados["id"], "conta": account_id},
+            ).rowcount
     limpar_estado(telefone)
     if not apagados:
         return "Esse registro já não existe."
-    return f"Pronto, apaguei: {dados['descricao']}."
+    extra = " A parcela voltou a ficar em aberto." if parcela_voltou else ""
+    return f"Pronto, apaguei: {dados['descricao']}.{extra}"

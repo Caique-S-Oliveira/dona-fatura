@@ -74,7 +74,7 @@ esconder o problema; um toque de simpatia, sem sermão. Mensagens curtas (até ~
 
 ## Comandos
 /inicio /metas /resumo /gasto VALOR DESCRIÇÃO /entrada VALOR DESCRIÇÃO /categorias /fixos
-/previsao /diagnostico /objetivos /parcelas /desfazer /privacidade /apagar_meus_dados /ajuda
+/previsao /diagnostico /objetivos /parcelas /pagar (ou /parcelas pagar) /desfazer /privacidade /apagar_meus_dados /ajuda
 /grafico previsao   (outros gráficos só se o piloto pedir)
 /casal /entrar CÓDIGO /grupo   (no casal: sufixo "meu" ou "casal", ex.: /resumo casal)
 Mensagem que não é comando -> IA identifica qual comando o usuário quer (resposta curta em
@@ -129,3 +129,4 @@ Etapa 14 concluída — rota /cron (header X-Cron-Secret) com alertas sem repeti
 Etapa 17 concluída — preparado para o Render: rota /saude (GET/HEAD, rápida, sem banco), .python-version (3.12.8), comando de start `uvicorn app.main:app --host 0.0.0.0 --port $PORT` e passo a passo (Render, variáveis, webhook, token permanente, cron-job.org). Pendente: páginas de privacidade e exclusão de dados.
 Etapa extra concluída — aprovação de acesso pelo admin (ADMIN_PHONE): número novo fica pendente sem conta, recebe 1 resposta e o admin recebe [Liberar] [Negar]; negado = silêncio; /pendentes /liberar /negar /usuarios só do admin; /ajuda muda conforme o /inicio concluído (campo cadastro_completo); sql/alter_acesso_admin.sql, tests/test_acesso.py.
 Etapa extra concluída — landing page em landing/ (HTML/CSS/JS puros): modos piloto/lançamento em config.js, textos em conteudo.js, variações ?v=, UTM/gclid, eventos track(), banner de cookies com Consent Mode v2, privacidade/termos (rascunho), CHECKLIST_ADS.md; POST /lead (app/leads.py, CORS só da LP, isca, limite por IP) e sql/alter_leads.sql; tests/test_leads.py e tests/test_landing.py.
+Etapa 18 concluída — /pagar (e /parcelas pagar): escolhe a parcela por botões/lista ou por nome, confirma [Sim] [Cancelar], registra a saída em Parcelas/dívidas e guarda as parcelas pagas de fato (pagar antes do vencimento, sem pagar duas vezes, aviso de dívida quitada); /desfazer reverte a marcação; a previsão e os alertas usam a coluna (app/comandos/pagar.py, sql/alter_pagar_parcelas.sql, tests/test_pagar.py).

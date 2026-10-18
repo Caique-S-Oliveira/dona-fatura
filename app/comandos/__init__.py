@@ -49,6 +49,8 @@ from app.comandos.parcelas import (
     continuar_gerir as continuar_parcela_gerir,
     continuar_parcela,
 )
+from app.comandos.pagar import ESTADO as ESTADO_PAGAR
+from app.comandos.pagar import comando_pagar, continuar_pagar
 from app.comandos.previsao import comando_grafico, comando_previsao
 from app.comandos.privacidade import ESTADO as ESTADO_APAGAR
 from app.comandos.privacidade import comando_apagar, comando_privacidade, continuar_apagar
@@ -80,6 +82,7 @@ COMANDOS_COM_USUARIO = {
     "diagnostico": comando_diagnostico,
     "objetivos": comando_objetivos,
     "parcelas": comando_parcelas,
+    "pagar": comando_pagar,
     "grafico": comando_grafico,
     "apagar_meus_dados": comando_apagar,
     "casal": comando_casal,
@@ -90,7 +93,7 @@ COMANDOS_COM_USUARIO = {
 # Todos os comandos previstos no CLAUDE.md (os que faltam respondem "Ainda estou aprendendo isso").
 COMANDOS_CONHECIDOS = {
     "inicio", "metas", "resumo", "gasto", "entrada", "categorias", "fixos",
-    "previsao", "diagnostico", "objetivos", "parcelas", "desfazer", "privacidade",
+    "previsao", "diagnostico", "objetivos", "parcelas", "pagar", "desfazer", "privacidade",
     "apagar_meus_dados", "ajuda", "grafico", "casal", "entrar", "grupo", "sair_casal",
 }
 
@@ -170,6 +173,8 @@ def _continuar_conversa(telefone: str, texto: str) -> str | Resposta | None:
         return continuar_objetivo_gerir(telefone, dados, texto)
     if estado == ESTADO_PARCELA_GERIR:
         return continuar_parcela_gerir(telefone, dados, texto)
+    if estado == ESTADO_PAGAR:
+        return continuar_pagar(telefone, dados, texto)
     if estado == ESTADO_APAGAR:
         return continuar_apagar(telefone, dados, texto)
     if estado == ESTADO_CASAL:

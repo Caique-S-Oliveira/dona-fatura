@@ -95,6 +95,7 @@ CREATE TABLE installments (
     account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE, created_by_user_id TEXT NOT NULL, description TEXT NOT NULL,
     installment_amount INTEGER NOT NULL, total_installments INTEGER NOT NULL,
     first_due_date TEXT NOT NULL, due_day INTEGER NOT NULL, scope TEXT NOT NULL,
+    paid_installments INTEGER, last_payment_id TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')));
 """
 

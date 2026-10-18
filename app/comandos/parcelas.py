@@ -114,13 +114,13 @@ def listar_parcelas(account_id, user_id) -> list[financas.Parcelamento]:
         linhas = connection.execute(
             text(
                 "SELECT description, installment_amount, total_installments, first_due_date,"
-                " due_day, id FROM installments WHERE account_id = :conta"
+                " due_day, id, paid_installments FROM installments WHERE account_id = :conta"
                 " AND (scope = 'conjunto' OR created_by_user_id = :usuario)"
                 " ORDER BY created_at"
             ),
             {"conta": account_id, "usuario": user_id},
         ).all()
-    return [financas.Parcelamento(l[0], l[1], l[2], l[3], l[4], str(l[5])) for l in linhas]
+    return [financas.Parcelamento(l[0], l[1], l[2], l[3], l[4], str(l[5]), l[6]) for l in linhas]
 
 
 # ---------- editar e excluir ----------
@@ -150,7 +150,15 @@ def valor_do_campo(campo: str, texto: str, p: financas.Parcelamento, hoje: date)
 def atualizar_parcela(account_id, p: financas.Parcelamento, campo: str, valor, hoje: date) -> None:
     if campo == "pagas":
         # a próxima parcela é a do próximo vencimento; as anteriores contam como pagas
-        coluna, valor = "first_due_date", financas.somar_meses(financas.proximo_dia(p.dia, hoje), -valor, p.dia)
+        novo_primeiro = financas.somar_meses(financas.proximo_dia(p.dia, hoje), -valor, p.dia)
+        with get_engine().begin() as connection:
+            connection.execute(
+                text("UPDATE installments SET first_due_date = :valor, last_payment_id = NULL,"
+                     " paid_installments = CASE WHEN paid_installments IS NULL THEN NULL ELSE CAST(:pagas AS INTEGER) END"
+                     " WHERE id = :id AND account_id = :conta"),
+                {"valor": novo_primeiro, "pagas": valor, "id": p.id, "conta": account_id},
+            )
+        return
     else:
         coluna = {"valor": "installment_amount", "parcelas": "total_installments"}[campo]
     with get_engine().begin() as connection:
@@ -246,6 +254,10 @@ def comando_parcelas(telefone: str, argumentos: str) -> str | Resposta:
     if not palavras:
         return _listar(telefone, account_id, user_id, hoje)
     acao = normalizar(palavras[0])
+    if acao == "pagar":  # mesmo que /pagar
+        from app.comandos.pagar import comando_pagar  # import tardio: pagar usa este módulo
+
+        return comando_pagar(telefone, " ".join(palavras[1:]))
     if acao in ("editar", "alterar", "excluir", "apagar", "remover"):
         return _editar_ou_excluir(telefone, account_id, user_id, acao, palavras[1:], hoje)
     if acao not in NOVOS:

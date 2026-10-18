@@ -330,14 +330,15 @@ def _contas_e_parcelas(destino: Destinatario):
             {"conta": destino.account_id, "usuario": destino.user_id},
         ).all()
         parcelas = connection.execute(
-            text("SELECT description, installment_amount, total_installments, first_due_date, due_day"
-                 " FROM installments WHERE account_id = :conta"
+            text("SELECT description, installment_amount, total_installments, first_due_date, due_day,"
+                 " paid_installments FROM installments WHERE account_id = :conta"
                  " AND (scope = 'conjunto' OR created_by_user_id = :usuario)"),
             {"conta": destino.account_id, "usuario": destino.user_id},
         ).all()
     return ([(c.payee, c.amount, _como_data(c.next_due_date)) for c in contas],
             [Parcelamento(p.description, p.installment_amount, p.total_installments,
-                          _como_data(p.first_due_date), p.due_day) for p in parcelas])
+                          _como_data(p.first_due_date), p.due_day,
+                          pagas_registradas=p.paid_installments) for p in parcelas])
 
 
 def _como_data(valor) -> date | None:

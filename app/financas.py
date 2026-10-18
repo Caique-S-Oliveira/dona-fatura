@@ -183,13 +183,13 @@ def a_vencer_no_mes(account_id, dia: date) -> Decimal:
         ).all()
         parcelas = connection.execute(
             text(
-                "SELECT description, installment_amount, total_installments, first_due_date, due_day"
-                " FROM installments WHERE account_id = :conta"
+                "SELECT description, installment_amount, total_installments, first_due_date, due_day,"
+                " paid_installments FROM installments WHERE account_id = :conta"
             ),
             {"conta": account_id},
         ).all()
     return valor_a_vencer(contas, dia) + valor_parcelas_a_vencer(
-        [Parcelamento(*p) for p in parcelas], dia
+        [Parcelamento(p[0], p[1], p[2], p[3], p[4], pagas_registradas=p[5]) for p in parcelas], dia
     )
 
 
@@ -216,14 +216,22 @@ class Parcelamento:
     primeiro_vencimento: date
     dia: int  # dia do mês em que vence
     id: str = ""  # linha no banco (vazio se ainda não foi gravada)
+    pagas_registradas: int | None = None  # pagas de fato (/pagar); None = parcela antiga
 
     def vencimento(self, numero: int) -> date:
         """Data da parcela `numero` (a primeira é a 1)."""
         return somar_meses(self.primeiro_vencimento, numero - 1, self.dia)
 
     def pagas(self, dia: date) -> int:
-        """Parcelas que já venceram até hoje (considero pagas)."""
+        """Parcelas pagas: as registradas pelo /pagar; sem registro, as que já venceram até hoje."""
+        if self.pagas_registradas is not None:
+            return min(self.pagas_registradas, self.total)
         return sum(1 for n in range(1, self.total + 1) if self.vencimento(n) <= dia)
+
+    def pendente_no_mes(self, dia: date) -> bool:
+        """Falta pagar uma parcela que vence até o fim do mês (inclui atrasada)?"""
+        proximo = self.proximo_vencimento(dia)
+        return proximo is not None and proximo <= ultimo_dia_do_mes(dia)
 
     def restantes(self, dia: date) -> int:
         return self.total - self.pagas(dia)

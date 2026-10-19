@@ -9,7 +9,7 @@ from app.comandos.acesso import (
     eh_admin,
     status_acesso,
 )
-from app.comandos.ajuda import comando_ajuda, comando_ajuda_usuario
+from app.comandos.ajuda import comando_ajuda, comando_ajuda_usuario, comando_guia
 from app.comandos.cadastro import garantir_usuario
 from app.comandos.casal import ESTADO as ESTADO_CASAL
 from app.comandos.casal import comando_casal, comando_entrar, continuar_casal
@@ -64,6 +64,7 @@ from app.comandos.resumo import comando_resumo
 # Comandos já implementados: nome -> função(argumentos) que devolve a resposta.
 COMANDOS = {
     "ajuda": comando_ajuda,
+    "guia": comando_guia,
     "privacidade": comando_privacidade,
 }
 
@@ -94,7 +95,7 @@ COMANDOS_COM_USUARIO = {
 COMANDOS_CONHECIDOS = {
     "inicio", "metas", "resumo", "gasto", "entrada", "categorias", "fixos",
     "previsao", "diagnostico", "objetivos", "parcelas", "pagar", "desfazer", "privacidade",
-    "apagar_meus_dados", "ajuda", "grafico", "casal", "entrar", "grupo", "sair_casal",
+    "apagar_meus_dados", "ajuda", "guia", "grafico", "casal", "entrar", "grupo", "sair_casal",
 }
 
 # Comandos que só o número em ADMIN_PHONE pode usar (de qualquer outro, nem parecem existir).
@@ -224,7 +225,7 @@ def processar_mensagem(telefone: str, texto: str) -> str | Resposta | None:
     if nome == "convite":
         return "Seu acesso já está ativo. Mande /ajuda para ver os comandos."
     if not cadastro_completo(telefone):
-        permitido = nome in ("inicio", "ajuda") if texto.strip().startswith("/") else _inicio_em_andamento(telefone)
+        permitido = nome in ("inicio", "ajuda", "guia") if texto.strip().startswith("/") else _inicio_em_andamento(telefone)
         if not permitido:
             return MSG_ANTES_DO_INICIO  # sem IA, sem comando: só pede o /inicio
     if texto.strip().startswith("/"):

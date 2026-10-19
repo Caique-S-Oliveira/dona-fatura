@@ -128,3 +128,17 @@ details[open] summary { color: var(--verde); }
   .secao.final .cta { justify-content: center; }
 }
 @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+
+@media print {
+  .topo, .rodape, .sem-impressao { display: none !important; }
+  .legal table { display: table; }
+  .legal tr, .legal li { break-inside: avoid; }
+}
+
+/* Guia de uso: exemplos de conversa */
+.conversa { background: var(--fundo-alt); border: 1px solid var(--borda); border-radius: var(--raio); padding: 10px 12px; margin: 10px 0 16px; font-size: .95rem; }
+.conversa p { margin: 6px 0; }
+.conversa .voce { background: var(--verde-claro); border-radius: 10px; padding: 6px 10px; display: inline-block; }
+.conversa .bot { color: var(--suave); }
+.dica { background: var(--ambar); border-radius: var(--raio); padding: 10px 12px; margin: 12px 0; }
+@media print { .conversa, .dica { break-inside: avoid; } }

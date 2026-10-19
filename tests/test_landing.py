@@ -7,7 +7,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 LANDING = Path(__file__).resolve().parent.parent / "landing"
-PAGINAS = ["index.html", "privacidade.html", "termos.html"]
+PAGINAS = ["index.html", "privacidade.html", "termos.html", "guia.html"]
 
 
 class Coletor(HTMLParser):

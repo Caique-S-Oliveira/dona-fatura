@@ -1,3 +1,5 @@
+import os
+
 from app.comandos.acesso import cadastro_completo, eh_admin
 
 TEXTO_AJUDA = """*Dona Fatura - comandos*
@@ -28,7 +30,8 @@ Também vale escrever: "gastei 45 no mercado" ou mandar a foto/PDF do comprovant
 /entrar CÓDIGO - entrar na conta do casal
 /sair_casal - separar as contas
 
-*Dados*
+*Mais*
+/guia - link do guia de uso completo
 /privacidade - o que é guardado
 /apagar_meus_dados - apaga tudo"""
 
@@ -47,6 +50,11 @@ TEXTO_ADMIN = """*Administração*
 
 def comando_ajuda(argumentos: str) -> str:
     return TEXTO_AJUDA
+
+
+def comando_guia(argumentos: str) -> str:
+    link = os.getenv("GUIA_URL") or "https://dona-fatura.pages.dev/guia.html"
+    return f"*Guia da Dona Fatura*\nTodos os comandos e dicas para usar melhor:\n{link}"
 
 
 def comando_ajuda_usuario(telefone: str, argumentos: str) -> str:

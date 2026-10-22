@@ -79,7 +79,7 @@ No máximo 3 mensagens por semana, por volta das 10h. Ordem de prioridade:
 1. Resumo semanal (inclui aviso de meta em 80% e 100%).
 2. Conta, assinatura ou parcela vencendo amanhã.
 3. Gasto muito acima do normal.
-4. Lembrete depois de 4 dias sem registros.
+4. Lembrete depois de 3 dias sem mandar mensagem (e outro aos 7 dias; depois para). Para parar: botão "Parar lembretes" ou /lembretes parar; para voltar: /lembretes.
 
 ---
 

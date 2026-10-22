@@ -24,6 +24,11 @@ CREATE TABLE sent_alerts (
     deduplication_key TEXT NOT NULL, period_start TEXT, period_end TEXT, whatsapp_message_id TEXT,
     sent_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
     UNIQUE (account_id, user_id, deduplication_key));
+CREATE TABLE reminder_log (
+    id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))), user_id TEXT NOT NULL, day TEXT NOT NULL,
+    stage_days INTEGER, result TEXT NOT NULL, reason TEXT,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    UNIQUE (user_id, day));
 CREATE TABLE processed_messages (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
     whatsapp_message_id TEXT, sender_phone_number TEXT NOT NULL, received_at TEXT);
@@ -88,7 +93,7 @@ class TestRegras(unittest.TestCase):
             self.assertTrue(alertas.modelos_ativos())
 
 
-class TestCron(BancoDeTeste):
+class BaseCron(BancoDeTeste):
     def setUp(self):
         super().setUp()
         with self.motor.begin() as conexao:
@@ -98,7 +103,7 @@ class TestCron(BancoDeTeste):
         self.textos, self.modelos = [], []
         for nome, destino in (
             ("send_text", lambda para, corpo: self.textos.append((para, corpo)) or "wamid.1"),
-            ("send_template", lambda para, nome_, params: self.modelos.append((para, nome_, params)) or "wamid.2"),
+            ("send_template", lambda para, nome_, params, botoes=(): self.modelos.append((para, nome_, params, botoes)) or "wamid.2"),
         ):
             patcher = patch(f"app.whatsapp.{nome}", destino)
             patcher.start()
@@ -123,6 +128,10 @@ class TestCron(BancoDeTeste):
     def alertas_gravados(self):
         return [l[0] for l in self.sql("SELECT deduplication_key FROM sent_alerts ORDER BY sent_at, deduplication_key")]
 
+    # os testes ficam em TestCron, abaixo
+
+
+class TestCron(BaseCron):
     def test_so_age_as_10h(self):
         self.mensagem_da_ana(AGORA.replace(hour=15) - timedelta(hours=1))
         self.movimento_na_semana_passada()
@@ -133,16 +142,14 @@ class TestCron(BancoDeTeste):
 
     def test_prioridade_e_sem_repeticao(self):
         self.mensagem_da_ana(AGORA - timedelta(hours=1))
-        self.movimento_na_semana_passada()  # última atividade 14/10: 5 dias sem registro hoje
+        self.movimento_na_semana_passada()
         alertas.executar_alertas(agora=AGORA)
         self.assertEqual(len(self.textos), 1)
         self.assertIn("Resumo da semana passada", self.textos[0][1])
         self.assertIn("Entradas: R$ 1.000,00", self.textos[0][1])
         self.assertEqual(self.alertas_gravados(), ["resumo_semanal:2026-10-19"])
-        alertas.executar_alertas(agora=AGORA)  # mesmo dia: o resumo não repete, vem o lembrete
-        self.assertIn("5 dias", self.textos[1][1])
-        alertas.executar_alertas(agora=AGORA)  # nada mais para enviar
-        self.assertEqual(len(self.textos), 2)
+        alertas.executar_alertas(agora=AGORA)  # mesmo dia: o resumo não repete e não há mais nada
+        self.assertEqual(len(self.textos), 1)
         self.assertEqual(self.modelos, [])
 
     def test_vencimento_amanha(self):
@@ -178,7 +185,7 @@ class TestCron(BancoDeTeste):
         with patch.dict(os.environ, {"MODELOS_ATIVOS": "1"}):
             alertas.executar_alertas(agora=AGORA)
         self.assertEqual(self.textos, [])
-        para, nome, params = self.modelos[0]
+        para, nome, params, _ = self.modelos[0]
         self.assertEqual((para, nome), (ANA, "resumo_semanal"))
         self.assertEqual(params[:4], ["12 a 18/10", "R$ 1.000,00", "R$ 100,00", "R$ 900,00"])
         self.assertEqual(self.alertas_gravados(), ["resumo_semanal:2026-10-19"])
@@ -221,6 +228,133 @@ class TestCron(BancoDeTeste):
         alertas.preparar_alerta_gasto(ANA, conta, usuario, {"valor": "50"}, cat)
         alertas.enviar_alertas_de_gasto()
         self.assertEqual(self.textos, [])
+
+
+class TestLembreteDeInatividade(BaseCron):
+    """Lembrete por modelo: aos 3 e aos 7 dias sem mensagem do usuário."""
+
+    def setUp(self):
+        super().setUp()
+        patcher = patch.dict(os.environ, {"MODELOS_ATIVOS": "1", "INATIVIDADE_DIAS": "3", "MODELO_LEMBRETE": ""})
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def parada_ha(self, dias):
+        self.mensagem_da_ana(AGORA - timedelta(days=dias, hours=1))
+
+    def log(self):
+        return [tuple(l) for l in self.sql("SELECT result, reason FROM reminder_log ORDER BY created_at")]
+
+    def test_recente_nao_recebe_nem_gera_log(self):
+        self.parada_ha(2)
+        alertas.executar_alertas(agora=AGORA)
+        self.assertEqual((self.modelos, self.log()), ([], []))
+
+    def test_3_dias_envia_modelo_com_nome_data_e_botoes(self):
+        self.parada_ha(3)
+        alertas.executar_alertas(agora=AGORA)
+        para, nome, params, botoes = self.modelos[0]
+        self.assertEqual((para, nome), (ANA, "lembrete_registro"))
+        self.assertEqual(params, ["Ana", "01/09"])  # sem registros: vale o dia do cadastro
+        self.assertEqual(botoes, ("lembrete_registrar", "lembrete_parar"))
+        self.assertEqual(self.log()[0][0], "enviado")
+        self.assertEqual(self.textos, [])
+
+    def test_um_aos_3_dias_outro_aos_7_e_depois_para(self):
+        self.parada_ha(3)
+        alertas.executar_alertas(agora=AGORA)
+        alertas.executar_alertas(agora=AGORA)  # mesmo dia: não repete
+        self.assertEqual(len(self.modelos), 1)
+        alertas.executar_alertas(agora=AGORA + timedelta(days=2))  # 5 dias parada: nada novo
+        self.assertEqual(len(self.modelos), 1)
+        depois = AGORA + timedelta(days=4)  # 7 dias parada: o segundo
+        alertas.executar_alertas(agora=depois)
+        self.assertEqual(len(self.modelos), 2)
+        alertas.executar_alertas(agora=depois + timedelta(days=5))  # 12 dias: para
+        self.assertEqual(len(self.modelos), 2)
+
+    def test_volta_e_para_de_novo_recomeca(self):
+        self.parada_ha(3)
+        alertas.executar_alertas(agora=AGORA)
+        depois = AGORA + timedelta(days=10)
+        self.mensagem_da_ana(depois - timedelta(days=3, hours=1))  # voltou e parou outra vez
+        alertas.executar_alertas(agora=depois)
+        self.assertEqual(len(self.modelos), 2)
+
+    def test_modelos_desligados_pula_e_registra_o_motivo(self):
+        self.parada_ha(3)
+        with patch.dict(os.environ, {"MODELOS_ATIVOS": "0"}):
+            alertas.executar_alertas(agora=AGORA)
+        self.assertEqual(self.modelos, [])
+        self.assertEqual(self.alertas_gravados(), [])
+        self.assertIn("modelos desligados", self.log()[0][1])
+
+    def test_lembretes_desligados_pelo_usuario(self):
+        self.parada_ha(3)
+        self.sql("UPDATE users SET lembretes_ativos = 0")
+        alertas.executar_alertas(agora=AGORA)
+        self.assertEqual(self.modelos, [])
+        self.assertIn("desligados pelo usuário", self.log()[0][1])
+
+    def test_limite_semanal_vale_para_o_lembrete(self):
+        usuario, conta = self.ids(ANA)
+        self.parada_ha(3)
+        for n in range(3):
+            self.sql("INSERT INTO sent_alerts (account_id, user_id, alert_type, deduplication_key, sent_at)"
+                     " VALUES (:c, :u, 'x', :k, '2026-10-19 08:00:00')", c=conta, u=usuario, k=f"k{n}")
+        alertas.executar_alertas(agora=AGORA)
+        self.assertEqual(self.modelos, [])
+        self.assertIn("limite", self.log()[0][1])
+
+    def test_api_recusa_nao_tenta_de_novo_no_dia(self):
+        self.parada_ha(3)
+        tentativas = []
+
+        def recusa(*args, **kwargs):
+            tentativas.append(1)
+            raise RuntimeError("template paused")
+
+        with patch("app.whatsapp.send_template", recusa):
+            alertas.executar_alertas(agora=AGORA)
+            alertas.executar_alertas(agora=AGORA)
+        self.assertEqual(len(tentativas), 1)
+        self.assertEqual(self.alertas_gravados(), [])
+        resultado, motivo = self.log()[0]
+        self.assertEqual(resultado, "erro")
+        self.assertIn("template paused", motivo)
+        alertas.executar_alertas(agora=AGORA + timedelta(days=1))  # no dia seguinte tenta de novo
+        self.assertEqual(len(self.modelos), 1)
+
+    def test_nome_do_modelo_vem_do_env(self):
+        self.parada_ha(3)
+        with patch.dict(os.environ, {"MODELO_LEMBRETE": "outro_nome"}):
+            alertas.executar_alertas(agora=AGORA)
+        self.assertEqual(self.modelos[0][1], "outro_nome")
+
+
+class TestBotoesDoLembrete(BaseCron):
+    def test_parar_grava_preferencia_e_lembretes_religa(self):
+        from app.comandos import lembretes, processar_mensagem
+
+        texto, botoes = lembretes.tratar_botao(ANA, "lembrete_parar", "Parar lembretes")
+        self.assertEqual(botoes, [])
+        self.assertFalse(lembretes.lembretes_ligados(self.ids(ANA)[0]))
+        self.assertIn("ligados", processar_mensagem(ANA, "/lembretes"))
+        self.assertTrue(lembretes.lembretes_ligados(self.ids(ANA)[0]))
+
+    def test_registrar_agora_ensina_e_oferece_botoes(self):
+        from app.comandos import lembretes
+
+        texto, botoes = lembretes.tratar_botao(ANA, None, "Registrar agora")  # sem payload: vale o título
+        self.assertIn("/gasto", texto)
+        self.assertIn("comprovante", texto)
+        self.assertTrue(botoes)
+
+    def test_outros_botoes_nao_sao_do_lembrete(self):
+        from app.comandos import lembretes
+
+        self.assertIsNone(lembretes.tratar_botao(ANA, "sim", "Sim"))
+        self.assertIsNone(lembretes.tratar_botao(ANA, "lembrete_resumo", "Ver meu resumo"))
 
 
 if __name__ == "__main__":

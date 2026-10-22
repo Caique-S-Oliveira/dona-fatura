@@ -76,7 +76,7 @@ esconder o problema; um toque de simpatia, sem sermão. Mensagens curtas (até ~
 /inicio /metas /resumo /gasto VALOR DESCRIÇÃO /entrada VALOR DESCRIÇÃO /categorias /fixos
 /previsao /diagnostico /objetivos /parcelas /pagar (ou /parcelas pagar) /desfazer /privacidade /apagar_meus_dados /ajuda
 /grafico previsao   (outros gráficos só se o piloto pedir)
-/casal /entrar CÓDIGO /grupo   (no casal: sufixo "meu" ou "casal", ex.: /resumo casal)
+/lembretes /casal /entrar CÓDIGO /grupo   (no casal: sufixo "meu" ou "casal", ex.: /resumo casal)
 Mensagem que não é comando -> IA identifica qual comando o usuário quer (resposta curta em
 JSON). Nunca chamar a IA para um comando já reconhecido.
 
@@ -90,7 +90,9 @@ JSON). Nunca chamar a IA para um comando já reconhecido.
 ## Alertas
 - No máximo 3 mensagens automáticas por semana por usuário; padrão às 10h (America/Sao_Paulo).
 - Ordem de prioridade: (1) resumo semanal, (2) conta, assinatura ou parcela vencendo
-  amanhã, (3) gasto muito acima do normal, (4) lembrete após 4 dias sem registros (ajustável).
+  amanhã, (3) gasto muito acima do normal, (4) lembrete após 3 dias sem mensagem do usuário (INATIVIDADE_DIAS), por modelo, com um
+  segundo aos 7 dias; depois para até o usuário voltar. Botões "Registrar agora" e "Parar lembretes"
+  (/lembretes religa).
 - Meta em 80% e 100% e resumo do mês anterior vão dentro do resumo semanal, sem modelo próprio.
 - Usar o mínimo de modelos (templates) aprovados, porque são cobrados.
 
@@ -130,3 +132,4 @@ Etapa 17 concluída — preparado para o Render: rota /saude (GET/HEAD, rápida,
 Etapa extra concluída — aprovação de acesso pelo admin (ADMIN_PHONE): número novo fica pendente sem conta, recebe 1 resposta e o admin recebe [Liberar] [Negar]; negado = silêncio; /pendentes /liberar /negar /usuarios só do admin; /ajuda muda conforme o /inicio concluído (campo cadastro_completo); sql/alter_acesso_admin.sql, tests/test_acesso.py.
 Etapa extra concluída — landing page em landing/ (HTML/CSS/JS puros): modos piloto/lançamento em config.js, textos em conteudo.js, variações ?v=, UTM/gclid, eventos track(), banner de cookies com Consent Mode v2, privacidade/termos (rascunho), CHECKLIST_ADS.md; POST /lead (app/leads.py, CORS só da LP, isca, limite por IP) e sql/alter_leads.sql; tests/test_leads.py e tests/test_landing.py.
 Etapa 18 concluída — /pagar (e /parcelas pagar): escolhe a parcela por botões/lista ou por nome, confirma [Sim] [Cancelar], registra a saída em Parcelas/dívidas e guarda as parcelas pagas de fato (pagar antes do vencimento, sem pagar duas vezes, aviso de dívida quitada); /desfazer reverte a marcação; a previsão e os alertas usam a coluna (app/comandos/pagar.py, sql/alter_pagar_parcelas.sql, tests/test_pagar.py).
+Etapa 14 (complemento) concluída — lembrete de inatividade por modelo: aos 3 e aos 7 dias sem mensagem (INATIVIDADE_DIAS), modelo MODELO_LEMBRETE (lembrete_registro) com {{1}} nome e {{2}} último registro dd/mm, só com MODELOS_ATIVOS=1 e dentro do limite de 3/semana; botões Registrar agora / Parar lembretes, /lembretes religa; recusa da API bloqueia o dia e fica no log (tabela reminder_log), sql/alter_lembretes.sql.

@@ -39,6 +39,7 @@ CREATE TABLE users (
     access_status TEXT NOT NULL DEFAULT 'pendente', access_expires_at TEXT,
     cadastro_completo INTEGER NOT NULL DEFAULT 0, profile_name TEXT,
     pending_reply_sent INTEGER NOT NULL DEFAULT 0, admin_notified INTEGER NOT NULL DEFAULT 0,
+    lembretes_ativos INTEGER NOT NULL DEFAULT 1,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')));
 CREATE TABLE accounts (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),

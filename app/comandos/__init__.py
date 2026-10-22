@@ -33,6 +33,7 @@ from app.comandos.gasto import ESTADO as ESTADO_GASTO
 from app.comandos.gasto import comando_gasto, continuar_gasto, frase_de_gasto
 from app.comandos.inicio import ESTADO as ESTADO_INICIO
 from app.comandos.inicio import comando_inicio, continuar_inicio
+from app.comandos.lembretes import comando_lembretes, comando_testar_lembrete
 from app.comandos.metas import comando_metas
 from app.comandos.objetivos import ESTADO as ESTADO_OBJETIVO
 from app.comandos.objetivos import ESTADO_GERIR as ESTADO_OBJETIVO_GERIR
@@ -89,6 +90,7 @@ COMANDOS_COM_USUARIO = {
     "casal": comando_casal,
     "entrar": comando_entrar,
     "sair_casal": comando_sair_casal,
+    "lembretes": comando_lembretes,
 }
 
 # Todos os comandos previstos no CLAUDE.md (os que faltam respondem "Ainda estou aprendendo isso").
@@ -96,13 +98,14 @@ COMANDOS_CONHECIDOS = {
     "inicio", "metas", "resumo", "gasto", "entrada", "categorias", "fixos",
     "previsao", "diagnostico", "objetivos", "parcelas", "pagar", "desfazer", "privacidade",
     "apagar_meus_dados", "ajuda", "guia", "grafico", "casal", "entrar", "grupo", "sair_casal",
+    "lembretes",
 }
 
 # Comandos que só o número em ADMIN_PHONE pode usar (de qualquer outro, nem parecem existir).
-COMANDOS_ADMIN = {"liberar", "negar", "bloquear", "pendentes", "usuarios"}
+COMANDOS_ADMIN = {"liberar", "negar", "bloquear", "pendentes", "usuarios", "testar_lembrete"}
 
 # Comandos que a IA pode escolher numa frase livre (apagar dados só por comando explícito).
-COMANDOS_PELA_IA = COMANDOS_CONHECIDOS - {"apagar_meus_dados"}
+COMANDOS_PELA_IA = COMANDOS_CONHECIDOS - {"apagar_meus_dados", "lembretes"}
 
 BOAS_VINDAS = "Oi, eu sou a Dona Fatura! Vou cuidar das suas contas com você."
 
@@ -214,6 +217,8 @@ def processar_mensagem(telefone: str, texto: str) -> str | Resposta | None:
     None = não responder (número não liberado)."""
     nome, argumentos = _separar(texto)
     admin = eh_admin(telefone)
+    if admin and nome == "testar_lembrete":
+        return comando_testar_lembrete(telefone, argumentos)
     if admin and nome in COMANDOS_ADMIN:
         return comando_admin(nome, argumentos)
     status = "ativo" if admin else status_acesso(telefone)

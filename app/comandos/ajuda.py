@@ -31,6 +31,7 @@ Também vale escrever: "gastei 45 no mercado" ou mandar a foto/PDF do comprovant
 /sair_casal - separar as contas
 
 *Mais*
+/lembretes - religar os lembretes (/lembretes parar)
 /guia - link do guia de uso completo
 /privacidade - o que é guardado
 /apagar_meus_dados - apaga tudo"""

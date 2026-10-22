@@ -2,7 +2,7 @@
 // Nada aqui é segredo: IDs do Google e o número do bot são públicos.
 window.CONFIG = {
   // "piloto" = lista de espera | "lancamento" = botão leva ao WhatsApp do bot
-  MODO: "piloto",
+  MODO: "lancamento",
 
   // Número do bot, só dígitos com 55 e DDD (ex.: "5511987654321"). Usado no modo "lancamento".
   WHATSAPP_BOT: "5511927506874",

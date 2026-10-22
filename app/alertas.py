@@ -4,7 +4,8 @@ Regras:
 - no máximo 3 alertas por semana (segunda a domingo) por usuário, e nunca repetidos
   (a tabela sent_alerts guarda uma chave por alerta);
 - prioridade na rota /cron: (1) resumo semanal, (2) conta/assinatura/parcela vencendo amanhã,
-  (3) lembrete após 4 dias sem registros; no máximo 1 alerta por usuário a cada chamada;
+  (3) lembrete de inatividade (modelo, aos 3 e aos 7 dias sem mandar mensagem);
+  no máximo 1 alerta por usuário a cada chamada;
 - os números vêm do Python; a IA só reescreve o texto (se falhar ou trouxer número novo,
   vale o texto pronto);
 - texto comum só vale dentro da janela de 24h do WhatsApp. Fora dela, só modelo (template)
@@ -17,11 +18,13 @@ from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from decimal import Decimal
 
+import httpx
 from sqlalchemy import text
 
 from app import financas, ia
 from app.comandos.diagnostico import _metas_em_reais, _numeros
 from app.comandos.formato import formatar_reais
+from app.comandos.lembretes import PAYLOAD_PARAR, PAYLOAD_REGISTRAR, lembretes_ligados
 from app.comandos.metas import ler_metas, ler_renda, ler_renda_conjunta
 from app.comandos.casal import conta_em_casal
 from app.comandos.previsao import MESES
@@ -36,7 +39,8 @@ LIMITE_SEMANAL = 3
 # O WhatsApp aceita texto livre até 24h depois da última mensagem do usuário. Deixo 10 min de
 # folga para a mensagem não cruzar o limite no caminho.
 JANELA = timedelta(hours=24) - timedelta(minutes=10)
-DIAS_SEM_REGISTRO = 4
+INATIVIDADE_PADRAO = 3  # dias sem mensagem para o 1º lembrete (INATIVIDADE_DIAS no .env)
+SEGUNDO_LEMBRETE = 7  # dias sem mensagem para o 2º e último lembrete
 
 # Gasto muito acima do normal: pelo menos MULTIPLO x a média das compras da categoria nos
 # últimos DIAS_DE_HISTORICO dias (com no mínimo MIN_HISTORICO compras) e no mínimo VALOR_MINIMO.
@@ -53,11 +57,22 @@ TIPO_GASTO_ALTO = "gasto_alto"
 # Modelos (templates) da Meta. O corpo de cada um está em docs/modelos_whatsapp.md.
 MODELO_RESUMO = "resumo_semanal"
 MODELO_VENCIMENTO = "conta_vencendo_amanha"
-MODELO_LEMBRETE = "lembrete_sem_registros"
+MODELO_LEMBRETE_PADRAO = "lembrete_registro"  # nome do modelo na Meta (MODELO_LEMBRETE no .env)
 
 
 def modelos_ativos() -> bool:
     return os.getenv("MODELOS_ATIVOS", "0").strip() == "1"
+
+
+def modelo_lembrete() -> str:
+    return os.getenv("MODELO_LEMBRETE", "").strip() or MODELO_LEMBRETE_PADRAO
+
+
+def dias_de_inatividade() -> int:
+    try:
+        return max(1, int(os.getenv("INATIVIDADE_DIAS", "")))
+    except ValueError:
+        return INATIVIDADE_PADRAO
 
 
 @dataclass
@@ -69,6 +84,7 @@ class Alerta:
     parametros: list[str]  # variáveis do modelo: uma linha cada, sem quebra de linha
     inicio: date | None = None
     fim: date | None = None
+    botoes: tuple[str, ...] = ()  # payloads dos botões de resposta rápida do modelo
 
 
 @dataclass
@@ -188,6 +204,17 @@ def ja_enviado(destino: Destinatario, chave: str) -> bool:
 
 # ---------- envio ----------
 
+def _motivo_do_erro(erro: Exception) -> str:
+    """Resposta da Meta quando ela recusa (modelo não aprovado/pausado, número inválido...)."""
+    if isinstance(erro, httpx.HTTPStatusError):
+        try:
+            corpo = erro.response.json().get("error", {})
+            return f"HTTP {erro.response.status_code}, código {corpo.get('code')}: {corpo.get('message')}"
+        except (ValueError, AttributeError):
+            return f"HTTP {erro.response.status_code}: {erro.response.text[:200]}"
+    return f"{type(erro).__name__}: {erro}"[:300]
+
+
 def enviar_alerta(destino: Destinatario, alerta: Alerta, agora: datetime, ultima: datetime | None) -> str:
     """Tenta enviar. Devolve "texto", "modelo" ou o motivo de não ter enviado.
 
@@ -196,6 +223,8 @@ def enviar_alerta(destino: Destinatario, alerta: Alerta, agora: datetime, ultima
     from app import whatsapp  # import tardio: o módulo whatsapp importa os comandos
 
     em_janela = dentro_da_janela(ultima, agora)
+    if alerta.tipo == TIPO_LEMBRETE and em_janela:
+        return "pulado: janela de 24h aberta (o lembrete só vai por modelo)"
     if not em_janela and not modelos_ativos():
         return "pulado: fora da janela de 24h e modelos desligados"
     if not _reservar(destino, alerta):
@@ -205,12 +234,14 @@ def enviar_alerta(destino: Destinatario, alerta: Alerta, agora: datetime, ultima
             mensagem_id = whatsapp.send_text(destino.telefone, texto_do_alerta(alerta.fatos))
             canal = "texto"
         else:
-            mensagem_id = whatsapp.send_template(destino.telefone, alerta.modelo, alerta.parametros)
+            mensagem_id = whatsapp.send_template(destino.telefone, alerta.modelo, alerta.parametros,
+                                                 botoes=alerta.botoes)
             canal = "modelo"
-    except Exception:
-        logger.exception("Falha ao enviar alerta %s ao usuário %s", alerta.tipo, _curto(destino.user_id))
-        _desfazer_reserva(destino, alerta)  # não conta como enviado; tenta de novo na próxima
-        return "erro no envio"
+    except Exception as erro:
+        motivo = _motivo_do_erro(erro)
+        logger.error("Falha ao enviar alerta %s ao usuário %s: %s", alerta.tipo, _curto(destino.user_id), motivo)
+        _desfazer_reserva(destino, alerta)  # não conta como enviado
+        return f"erro no envio: {motivo}"
     _guardar_id_da_mensagem(destino, alerta, mensagem_id)
     return canal
 
@@ -364,7 +395,7 @@ def alerta_vencimento(destino: Destinatario, dia: date) -> tuple[Alerta | None, 
                   [f"{amanha:%d/%m}", lista, formatar_reais(total)], amanha, amanha), "ok"
 
 
-# ---------- (3) lembrete após 4 dias sem registros ----------
+# ---------- (3) lembrete de inatividade (só por modelo) ----------
 
 def ultima_atividade(destino: Destinatario) -> date:
     """Dia do último registro do usuário; sem nenhum, o dia em que ele se cadastrou."""
@@ -382,17 +413,86 @@ def ultima_atividade(destino: Destinatario) -> date:
     return ultimo.date()
 
 
+def marcos_do_lembrete() -> list[int]:
+    """Dias parado em que sai um lembrete: o 1º (INATIVIDADE_DIAS) e o 2º, aos 7 dias."""
+    primeiro = dias_de_inatividade()
+    return [primeiro, SEGUNDO_LEMBRETE] if primeiro < SEGUNDO_LEMBRETE else [primeiro]
+
+
+def marco_atual(dias_parado: int) -> int | None:
+    """O último marco já alcançado (None se ainda não chegou no primeiro)."""
+    alcancados = [m for m in marcos_do_lembrete() if dias_parado >= m]
+    return max(alcancados) if alcancados else None
+
+
+def _parado_desde(destino: Destinatario, dia: date) -> tuple[date | None, int | None]:
+    """(dia da última mensagem recebida, dias parado até `dia`); (None, None) se nunca falou."""
+    ultima = ultima_mensagem_do_usuario(destino.telefone)
+    if ultima is None:
+        return None, None
+    parado = ultima.astimezone(BRASIL).date()
+    return parado, (dia - parado).days
+
+
+def erro_hoje(destino: Destinatario, dia: date) -> bool:
+    with get_engine().connect() as connection:
+        return connection.execute(
+            text("SELECT 1 FROM reminder_log WHERE user_id = :u AND day = :d AND result = 'erro'"),
+            {"u": destino.user_id, "d": dia},
+        ).first() is not None
+
+
+def anotar_lembrete(destino: Destinatario, dia: date, resultado: str, motivo: str) -> None:
+    """Registra (no log e na tabela reminder_log) o que aconteceu com o lembrete do usuário hoje.
+    Só para quem é candidato (parado há INATIVIDADE_DIAS dias ou mais). "enviado" e "erro" não
+    são sobrescritos por um "pulado" posterior no mesmo dia."""
+    _, dias = _parado_desde(destino, dia)
+    marco = marco_atual(dias) if dias is not None else None
+    if marco is None:
+        return
+    logger.info("Lembrete %s (usuário %s, %d dias parado): %s",
+                resultado, _curto(destino.user_id), dias, motivo)
+    with get_engine().begin() as connection:
+        connection.execute(
+            text("INSERT INTO reminder_log (user_id, day, stage_days, result, reason)"
+                 " VALUES (:u, :d, :m, :r, :motivo)"
+                 " ON CONFLICT (user_id, day) DO UPDATE SET stage_days = :m, result = :r,"
+                 " reason = :motivo WHERE reminder_log.result = 'pulado'"),
+            {"u": destino.user_id, "d": dia, "m": marco, "r": resultado, "motivo": motivo[:300]},
+        )
+
+
+def _nome_para_o_modelo(destino: Destinatario) -> str:
+    with get_engine().connect() as connection:
+        linha = connection.execute(
+            text("SELECT display_name, profile_name FROM users WHERE id = :u"), {"u": destino.user_id}
+        ).first()
+    nome = (linha.display_name or linha.profile_name or "") if linha else ""
+    return " ".join(nome.split()) or "você"  # variável de modelo não aceita quebra de linha nem vazio
+
+
 def alerta_lembrete(destino: Destinatario, dia: date) -> tuple[Alerta | None, str]:
-    ultimo = ultima_atividade(destino)
-    sem_registro = (dia - ultimo).days
-    if sem_registro < DIAS_SEM_REGISTRO:
-        return None, f"registrou há {sem_registro} dia(s)"
-    chave = f"{TIPO_LEMBRETE}:{ultimo.isoformat()}"  # um lembrete por período parado
+    """Aos 3 dias sem mensagem do usuário (e de novo aos 7), um modelo com {{1}} = nome e
+    {{2}} = dia do último registro (dd/mm). Depois do 2º, para até o usuário voltar."""
+    parado, dias = _parado_desde(destino, dia)
+    if parado is None:
+        return None, "o usuário nunca mandou mensagem"
+    marco = marco_atual(dias)
+    if marco is None:
+        return None, f"mandou mensagem há {dias} dia(s)"
+    if not lembretes_ligados(destino.user_id):
+        return None, "lembretes desligados pelo usuário"
+    chave = f"{TIPO_LEMBRETE}:{parado.isoformat()}:{marco}"  # um por marco a cada período parado
     if ja_enviado(destino, chave):
-        return None, "lembrete já enviado"
-    fatos = (f"Faz {sem_registro} dias que você não registra nada. "
+        return None, f"lembrete de {marco} dias já enviado"
+    if erro_hoje(destino, dia):
+        return None, "a API recusou o modelo hoje; só tenta de novo amanhã"
+    registro = ultima_atividade(destino)
+    fatos = (f"Faz {dias} dias que você não aparece por aqui. "
              "Mande /gasto VALOR DESCRIÇÃO ou uma foto do comprovante.")
-    return Alerta(TIPO_LEMBRETE, chave, fatos, MODELO_LEMBRETE, [str(sem_registro)], ultimo, dia), "ok"
+    return Alerta(TIPO_LEMBRETE, chave, fatos, modelo_lembrete(),
+                  [_nome_para_o_modelo(destino), f"{registro:%d/%m}"], parado, dia,
+                  (PAYLOAD_REGISTRAR, PAYLOAD_PARAR)), "ok"
 
 
 # ---------- rota /cron ----------
@@ -432,19 +532,29 @@ def alertas_do_dia(destino: Destinatario, dia: date) -> list[tuple[str, Alerta |
 def processar_usuario(destino: Destinatario, agora: datetime) -> None:
     """Envia no máximo 1 alerta (o mais prioritário que puder ser enviado agora)."""
     usuario = _curto(destino.user_id)
+    dia = agora.astimezone(BRASIL).date()
     if enviados_na_semana(destino.user_id, agora) >= LIMITE_SEMANAL:
         logger.info("Alerta pulado (usuário %s): limite de %d por semana", usuario, LIMITE_SEMANAL)
+        anotar_lembrete(destino, dia, "pulado", f"limite de {LIMITE_SEMANAL} mensagens por semana")
         return
     ultima = ultima_mensagem_do_usuario(destino.telefone)
-    for nome, alerta, motivo in alertas_do_dia(destino, agora.astimezone(BRASIL).date()):
+    for nome, alerta, motivo in alertas_do_dia(destino, dia):
         if alerta is None:
             logger.info("Alerta %s pulado (usuário %s): %s", nome, usuario, motivo)
+            if nome == "lembrete":
+                anotar_lembrete(destino, dia, "pulado", motivo)
             continue
         resultado = enviar_alerta(destino, alerta, agora, ultima)
         if resultado in ("texto", "modelo"):
             logger.info("Alerta %s enviado (usuário %s) por %s", nome, usuario, resultado)
+            if alerta.tipo == TIPO_LEMBRETE:
+                anotar_lembrete(destino, dia, "enviado", f"modelo {alerta.modelo}")
+            else:
+                anotar_lembrete(destino, dia, "pulado", f"outro alerta ({nome}) enviado hoje")
             return  # 1 por chamada: o resto fica para os próximos dias
         logger.info("Alerta %s pulado (usuário %s): %s", nome, usuario, resultado)
+        if alerta.tipo == TIPO_LEMBRETE:
+            anotar_lembrete(destino, dia, "erro" if resultado.startswith("erro") else "pulado", resultado)
 
 
 def executar_alertas(forcar: bool = False, agora: datetime | None = None) -> None:

@@ -25,14 +25,27 @@ Vencimento amanhã ({{1}}): {{2}}. Total: {{3}}. Para ver suas contas, envie /fi
 ```
 Exemplos: `20/10` | `Netflix: R$ 39,90; Geladeira (parcela 3/10): R$ 200,00` | `R$ 239,90`
 
-## 3. `lembrete_sem_registros` (1 variável)
+## 3. `lembrete_registro` (2 variáveis + 2 botões)
+
+O nome pode ser trocado pela variável `MODELO_LEMBRETE` no .env (padrão `lembrete_registro`).
 
 Texto:
 ```
-Sua conta na Dona Fatura está há {{1}} dias sem registros. Para registrar um gasto, envie /gasto VALOR DESCRIÇÃO.
+Oi, {{1}}! Seu último registro na Dona Fatura foi em {{2}}. Que tal anotar seus gastos de hoje? É rapidinho.
 ```
-Exemplo: `5`
+Exemplos: `Ana` | `18/10`
+
+Botões (tipo **Resposta rápida**, nesta ordem):
+1. `Registrar agora`
+2. `Parar lembretes`
+
+O bot envia o payload `lembrete_registrar` e `lembrete_parar` nos botões; "Registrar agora" responde
+com como registrar (/gasto, comprovante) e "Parar lembretes" desliga os lembretes (`/lembretes` religa).
+
+Quando sai: o usuário está há `INATIVIDADE_DIAS` dias (padrão 3) sem mandar mensagem, e de novo aos 7 dias;
+depois para até ele voltar. Respeita o limite de 3 mensagens por semana e só vai com `MODELOS_ATIVOS=1`.
 
 Atenção: este é o mais sujeito a que a Meta reclassificar como Marketing (é um lembrete para usar o
-serviço). Se isso acontecer, o custo por envio é maior; nesse caso vale não criar este modelo
-(o lembrete simplesmente é pulado fora da janela de 24h).
+serviço). Se isso acontecer, o custo por envio é maior. Se a Meta recusar o envio (modelo não aprovado ou
+pausado, número inválido), o bot não tenta de novo no mesmo dia e grava o motivo no log e na tabela
+`reminder_log`.

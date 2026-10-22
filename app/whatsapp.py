@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 from sqlalchemy import text
 
 from app import alertas
-from app.comandos import acesso
+from app.comandos import acesso, lembretes
 from app.comandos import processar_comprovante, processar_mensagem
 from app.comandos.resposta import Resposta
 from app.comandos.sair_casal import pegar_avisos
@@ -78,19 +78,26 @@ def send_text(to: str, body: str) -> str | None:
     return _post_message({"to": to, "type": "text", "text": {"body": body}})
 
 
-def send_template(to: str, nome: str, parametros: list[str], idioma: str = "pt_BR") -> str | None:
-    """Mensagem por modelo (template) aprovado; vale também fora da janela de 24h."""
+def send_template(to: str, nome: str, parametros: list[str], idioma: str = "pt_BR",
+                  botoes: tuple[str, ...] = ()) -> str | None:
+    """Mensagem por modelo (template) aprovado; vale também fora da janela de 24h.
+
+    botoes: o payload de cada botão de resposta rápida do modelo, na ordem (volta no toque)."""
+    componentes = [{
+        "type": "body",
+        "parameters": [{"type": "text", "text": valor} for valor in parametros],
+    }]
+    for indice, payload in enumerate(botoes):
+        componentes.append({
+            "type": "button",
+            "sub_type": "quick_reply",
+            "index": str(indice),
+            "parameters": [{"type": "payload", "payload": payload}],
+        })
     return _post_message({
         "to": to,
         "type": "template",
-        "template": {
-            "name": nome,
-            "language": {"code": idioma},
-            "components": [{
-                "type": "body",
-                "parameters": [{"type": "text", "text": valor} for valor in parametros],
-            }],
-        },
+        "template": {"name": nome, "language": {"code": idioma}, "components": componentes},
     })
 
 
@@ -185,11 +192,15 @@ def message_text(message: dict) -> str | None:
         if interativo.get("type") == "list_reply":
             return interativo.get("list_reply", {}).get("id")
         return interativo.get("button_reply", {}).get("title")
+    if message.get("type") == "button":  # toque num botão de modelo (template)
+        return message.get("button", {}).get("text")
     return None
 
 
 def message_button_id(message: dict) -> str | None:
     """Id do botão de resposta rápida tocado (None para o resto)."""
+    if message.get("type") == "button":  # botão de modelo: o payload que enviamos junto
+        return message.get("button", {}).get("payload")
     if message.get("type") != "interactive":
         return None
     return message.get("interactive", {}).get("button_reply", {}).get("id")
@@ -270,6 +281,15 @@ def handle_incoming(payload: dict) -> None:
                     acesso.enviar_pedidos()
                 continue
             entregar_avisos(sender)
+            resposta_lembrete = lembretes.tratar_botao(sender, botao, texto)
+            if resposta_lembrete is not None:  # "Registrar agora" / "Parar lembretes"
+                corpo, botoes = resposta_lembrete
+                if botoes:
+                    send_buttons_ids(sender, corpo, botoes)
+                else:
+                    send_text(sender, corpo)
+                continue
+            texto = lembretes.COMANDO_DO_BOTAO.get(botao, texto)
             alertas.abrir_fila()
             midia = message_media(message)
             if texto is not None:

@@ -241,3 +241,17 @@ CREATE TABLE IF NOT EXISTS pending_notices (
 );
 
 CREATE INDEX IF NOT EXISTS pending_notices_user_idx ON pending_notices (user_id);
+
+-- Etapa 14 (complemento): lembrete de inatividade por modelo (veja sql/alter_lembretes.sql).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS lembretes_ativos BOOLEAN NOT NULL DEFAULT TRUE;
+
+CREATE TABLE IF NOT EXISTS reminder_log (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    day DATE NOT NULL,
+    stage_days INTEGER,
+    result TEXT NOT NULL CHECK (result IN ('enviado', 'pulado', 'erro')),
+    reason TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (user_id, day)
+);

@@ -47,21 +47,22 @@ def comando_lembretes(telefone: str, argumentos: str) -> str:
     return TEXTO_LIGADO
 
 
-def _nome_para_teste(telefone: str) -> str:
+def _dados_para_teste(telefone: str):
+    """(nome, user_id) de quem tem conta; ("Teste", None) para número sem conta."""
     with get_engine().connect() as connection:
         linha = connection.execute(
-            text("SELECT display_name, profile_name FROM users WHERE phone_number = :t"),
+            text("SELECT id, display_name, profile_name FROM users WHERE phone_number = :t"),
             {"t": telefone},
         ).first()
-    nome = (linha.display_name or linha.profile_name or "") if linha else ""
-    return " ".join(nome.split()) or "Teste"
+    if linha is None:
+        return "Teste", None
+    nome = " ".join((linha.display_name or linha.profile_name or "").split())
+    return nome or "Teste", linha.id
 
 
 def comando_testar_lembrete(admin: str, argumentos: str) -> str:
     """Admin: envia já o modelo de lembrete, sem janela de 24h, limites nem registro de envio."""
     # imports tardios: alertas e whatsapp importam este módulo
-    from datetime import datetime, timedelta
-
     from app import alertas, whatsapp
     from app.comandos.acesso import so_digitos
 
@@ -72,9 +73,12 @@ def comando_testar_lembrete(admin: str, argumentos: str) -> str:
     else:
         destino = so_digitos(admin)
     modelo = alertas.modelo_lembrete()
-    data = (datetime.now(alertas.BRASIL) - timedelta(days=3)).date()
+    nome, user_id = _dados_para_teste(destino)
+    if user_id is None:
+        return f"+{destino} não tem conta na Dona Fatura, então não há data de último registro."
+    data = alertas.ultima_atividade(alertas.Destinatario(str(user_id), "", destino))
     try:
-        whatsapp.send_template(destino, modelo, [_nome_para_teste(destino), f"{data:%d/%m}"],
+        whatsapp.send_template(destino, modelo, [nome, f"{data:%d/%m}"],
                                botoes=(PAYLOAD_REGISTRAR, PAYLOAD_PARAR))
     except Exception as erro:
         return f"Não enviou o modelo {modelo}. {alertas._motivo_do_erro(erro)}"

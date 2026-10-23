@@ -255,3 +255,6 @@ CREATE TABLE IF NOT EXISTS reminder_log (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (user_id, day)
 );
+
+-- Aviso de privacidade (veja sql/alter_privacidade_aceite.sql).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacidade_aceita_em TIMESTAMPTZ;

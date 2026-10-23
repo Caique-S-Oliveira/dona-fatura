@@ -84,6 +84,7 @@ class TestMetas(unittest.TestCase):
         self.assertIsNone(validar_meta(metas, "Investimento", "amount", Decimal("5000")))
 
 
+@patch("app.comandos.aviso.aceitou", new=lambda telefone: True)
 @patch("app.comandos.cadastro_completo", new=lambda telefone: True)
 @patch("app.comandos.garantir_usuario", return_value=False)
 @patch("app.comandos.status_acesso", return_value="ativo")

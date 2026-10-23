@@ -43,9 +43,9 @@ Guardamos apenas valor, data, favorecido e categoria.</p>
 <p>Não vendemos nem compartilhamos seus dados com ninguém.</p>
 
 <h2>Quem tem acesso</h2>
-<p>Seus dados ficam num banco protegido por senha e servem só para gerar seus resumos. O acesso
-técnico ao banco é só do responsável pelo projeto, que não olha seus dados a não ser que você peça
-ajuda. No casal, seu parceiro só vê o que for conjunto.</p>
+<p>Seus dados ficam num banco protegido por senha e servem só para gerar seus resumos. Quem
+administra o banco de dados consegue ver esses dados: hoje é só o responsável pelo projeto, que não
+olha os seus a não ser que você peça ajuda. No casal, seu parceiro só vê o que for conjunto.</p>
 
 <h2>Seus direitos</h2>
 <p>Você pode apagar seus dados a qualquer momento com o comando /apagar_meus_dados, ou pedir

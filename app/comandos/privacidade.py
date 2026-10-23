@@ -11,9 +11,10 @@ BOTOES = ("Apagar tudo", "Cancelar")
 
 TEXTO_PRIVACIDADE = (
     "🔒 Seus dados ficam num banco protegido por senha e servem só para gerar seus resumos. "
-    "Não vendo nem compartilho com ninguém. O acesso técnico ao banco é só do responsável pelo projeto, "
-    "que não olha seus dados a não ser que você peça ajuda. No casal, seu parceiro só vê o que for conjunto. "
-    "Para apagar tudo, mande /apagar_meus_dados."
+    "Não vendo nem compartilho com ninguém. Quem administra o banco de dados consegue ver esses dados: "
+    "hoje é só o responsável pelo projeto, que não olha os seus a não ser que você peça ajuda. "
+    "No casal, seu parceiro só vê o que for conjunto. "
+    "Para ver tudo o que guardo, mande /meus_dados. Para apagar tudo, mande /apagar_meus_dados."
 )
 
 TEXTO_APAGADO = (
@@ -53,6 +54,8 @@ def _apagar(telefone: str, user_id, account_id) -> bool:
             "DELETE FROM installments WHERE account_id = :conta",
             "DELETE FROM goals WHERE account_id = :conta",
             "DELETE FROM sent_alerts WHERE account_id = :conta",
+            "DELETE FROM reminder_log WHERE user_id = :usuario",
+            "DELETE FROM pending_notices WHERE user_id = :usuario",
             "DELETE FROM categories WHERE account_id = :conta",
             "UPDATE members SET expected_income = NULL"
             " WHERE account_id = :conta AND user_id = :usuario",

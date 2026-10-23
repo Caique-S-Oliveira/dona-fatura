@@ -142,9 +142,11 @@ class TestFraseLivrePelaIA(unittest.TestCase):
     def test_ia_nao_entendeu(self, ia, limpar):
         self.assertIsNone(frase_pela_ia(USUARIO, "bom dia"))
 
+    @patch("app.comandos.ajuda.eh_admin", return_value=False)
+    @patch("app.comandos.ajuda.cadastro_completo", return_value=True)  # sem acessar o banco
     @patch("app.comandos.ia.identificar_comando", return_value=("ajuda", ""))
-    def test_comando_sem_usuario(self, ia, limpar):
-        self.assertIn("Comandos da Dona Fatura", frase_pela_ia(USUARIO, "o que você faz?"))
+    def test_comando_sem_usuario(self, ia, *_):
+        self.assertIn("Dona Fatura - comandos", frase_pela_ia(USUARIO, "o que você faz?"))
 
 
 class TestIdentificarComando(unittest.TestCase):

@@ -34,6 +34,7 @@ Também vale escrever: "gastei 45 no mercado" ou mandar a foto/PDF do comprovant
 /lembretes - religar os lembretes (/lembretes parar)
 /guia - link do guia de uso completo
 /privacidade - o que é guardado
+/meus_dados - planilha com tudo o que guardo de você
 /apagar_meus_dados - apaga tudo"""
 
 

@@ -15,3 +15,4 @@ class Resposta:
     botao_lista: str = "Escolher"
     titulo_lista: str = "Categorias"  # título da seção da lista (até 24 letras)
     imagem: bytes | None = None  # PNG; o texto vira a legenda
+    documento: tuple[str, bytes] | None = None  # (nome do arquivo, conteúdo .xlsx); o texto vira a legenda

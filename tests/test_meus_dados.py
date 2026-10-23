@@ -136,6 +136,8 @@ class TestApagarMantemNumero(test_casal.BancoDeTeste):
             "CREATE TABLE sent_alerts (account_id TEXT, user_id TEXT)",
             "CREATE TABLE reminder_log (user_id TEXT)",
             "CREATE TABLE processed_messages (sender_phone_number TEXT)",
+            "CREATE TABLE conversation_state (phone_number TEXT)",
+            "CREATE TABLE leads (telefone TEXT)",
         ):
             self.sql(comando)
 
@@ -146,7 +148,13 @@ class TestApagarMantemNumero(test_casal.BancoDeTeste):
         self.registrar(ANA, 40, "meu", categoria=cat)
         self.sql("INSERT INTO pending_notices (user_id, message) VALUES (:u, 'oi')", u=user)
         self.sql("INSERT INTO reminder_log (user_id) VALUES (:u)", u=user)
+        self.sql("INSERT INTO conversation_state (phone_number) VALUES (:t)", t=ANA)
+        self.sql("INSERT INTO leads (telefone) VALUES (:t)", t=ANA)
+        self.sql("UPDATE users SET profile_name = 'Ana Perfil' WHERE phone_number = :t", t=ANA)
         self.assertTrue(_apagar(ANA, user, conta))
+        self.assertEqual(self.sql("SELECT count(*) FROM conversation_state").scalar(), 0)
+        self.assertEqual(self.sql("SELECT count(*) FROM leads").scalar(), 0)
+        self.assertIsNone(self.sql("SELECT profile_name FROM users").scalar())
         self.assertEqual(self.sql("SELECT count(*) FROM transactions").scalar(), 0)
         self.assertEqual(self.sql("SELECT count(*) FROM pending_notices").scalar(), 0)
         self.assertEqual(self.sql("SELECT count(*) FROM reminder_log").scalar(), 0)

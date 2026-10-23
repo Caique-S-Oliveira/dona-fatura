@@ -12,13 +12,15 @@ BOTOES = ("Apagar tudo", "Cancelar")
 TEXTO_PRIVACIDADE = (
     "🔒 Seus dados ficam num banco protegido por senha e servem só para gerar seus resumos. "
     "Não vendo nem compartilho com ninguém. Quem administra o banco de dados consegue ver esses dados: "
-    "hoje é só o responsável pelo projeto, que não olha os seus a não ser que você peça ajuda. "
+    "hoje é só o responsável pelo projeto. "
+    "Pelo bot, a IA (Anthropic) lê suas fotos, PDFs e frases livres; os servidores ficam fora do Brasil. "
+    "Guardo dados técnicos por 30 a 90 dias e o resto até você apagar. "
     "No casal, seu parceiro só vê o que for conjunto. "
     "Para ver tudo o que guardo, mande /meus_dados. Para apagar tudo, mande /apagar_meus_dados."
 )
 
 TEXTO_APAGADO = (
-    "Pronto, apaguei seus registros, metas, categorias, renda e nome. "
+    "Pronto, apaguei seus registros, metas, categorias, renda, nome e o cadastro da lista de espera. "
     "Mantive só seu número e a liberação de acesso, para você poder voltar quando quiser (/inicio)."
 )
 
@@ -59,8 +61,11 @@ def _apagar(telefone: str, user_id, account_id) -> bool:
             "DELETE FROM categories WHERE account_id = :conta",
             "UPDATE members SET expected_income = NULL"
             " WHERE account_id = :conta AND user_id = :usuario",
-            "UPDATE users SET display_name = NULL, cadastro_completo = FALSE WHERE id = :usuario",
+            "UPDATE users SET display_name = NULL, profile_name = NULL, cadastro_completo = FALSE"
+            " WHERE id = :usuario",
             "DELETE FROM processed_messages WHERE sender_phone_number = :telefone",
+            "DELETE FROM conversation_state WHERE phone_number = :telefone",
+            "DELETE FROM leads WHERE telefone = :telefone",
         ):
             connection.execute(text(comando), parametros)
     return True

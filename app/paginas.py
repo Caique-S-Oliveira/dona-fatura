@@ -44,12 +44,30 @@ Guardamos apenas valor, data, favorecido e categoria.</p>
 
 <h2>Quem tem acesso</h2>
 <p>Seus dados ficam num banco protegido por senha e servem só para gerar seus resumos. Quem
-administra o banco de dados consegue ver esses dados: hoje é só o responsável pelo projeto, que não
-olha os seus a não ser que você peça ajuda. No casal, seu parceiro só vê o que for conjunto.</p>
+administra o banco de dados consegue ver esses dados: hoje é só o responsável pelo projeto. No casal,
+seu parceiro só vê o que for conjunto.</p>
+
+<h2>Por que usamos seus dados</h2>
+<p>Para prestar o serviço que você pediu (registrar gastos e rendas, comparar com suas metas e
+avisar). É a base de execução de contrato (LGPD, art. 7º, V). Os lembretes automáticos têm como base
+o legítimo interesse (art. 7º, IX) e você pode pará-los quando quiser. Descrições de gastos podem
+revelar informações sensíveis (como saúde); só as usamos para o serviço, e você escolhe o que escrever.</p>
+
+<h2>Por quanto tempo guardamos</h2>
+<ul>
+<li>Seus registros, metas e renda: até você apagar com /apagar_meus_dados ou pedir por e-mail.</li>
+<li>Dados técnicos do funcionamento do bot: mensagens recebidas, 30 dias; avisos de alertas e lembretes, 90 dias;
+conversas em andamento, até expirarem.</li>
+</ul>
+
+<h2>Servidores fora do Brasil</h2>
+<p>Meta, Anthropic, Render e Supabase podem processar dados fora do Brasil (LGPD, art. 33). Usamos
+esses serviços porque o bot depende deles; não enviamos seus dados a mais ninguém.</p>
 
 <h2>Seus direitos</h2>
-<p>Você pode apagar seus dados a qualquer momento com o comando /apagar_meus_dados, ou pedir
-por e-mail. Veja <a href="/exclusao-de-dados">como excluir seus dados</a>.</p>
+<p>Você pode ver tudo o que guardamos com /meus_dados, apagar com /apagar_meus_dados, ou pedir
+acesso, correção, portabilidade ou eliminação por e-mail. Respondemos em até 15 dias. Se achar que
+seus direitos não foram atendidos, você pode reclamar à ANPD (gov.br/anpd). Veja <a href="/exclusao-de-dados">como excluir seus dados</a>.</p>
 """,
 )
 
@@ -66,7 +84,7 @@ acesso, para você poder voltar quando quiser.</p>
 <h2>2. Por e-mail (inclusive o número)</h2>
 <p>Para remover também o seu número do sistema, escreva para
 <a href="mailto:{EMAIL}">{EMAIL}</a> a partir de uma conta que possamos associar a você, informando
-o número de WhatsApp usado. Responderemos e concluiremos a exclusão em até 30 dias.</p>
+o número de WhatsApp usado. Responderemos e concluiremos a exclusão em até 15 dias.</p>
 
 <p>Mais detalhes na <a href="/privacidade">Política de Privacidade</a>.</p>
 """,

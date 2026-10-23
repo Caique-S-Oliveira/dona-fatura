@@ -39,7 +39,7 @@ CREATE TABLE users (
     access_status TEXT NOT NULL DEFAULT 'pendente', access_expires_at TEXT,
     cadastro_completo INTEGER NOT NULL DEFAULT 0, profile_name TEXT,
     pending_reply_sent INTEGER NOT NULL DEFAULT 0, admin_notified INTEGER NOT NULL DEFAULT 0,
-    lembretes_ativos INTEGER NOT NULL DEFAULT 1,
+    lembretes_ativos INTEGER NOT NULL DEFAULT 1, privacidade_aceita_em TEXT,
     created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')));
 CREATE TABLE accounts (
     id TEXT PRIMARY KEY DEFAULT (lower(hex(randomblob(16)))),
@@ -159,7 +159,7 @@ class BancoDeTeste(unittest.TestCase):
     def cadastrar(self, telefone, nome, renda=None):
         garantir_usuario(telefone)
         user_id, account_id = conta_do_usuario(telefone)
-        self.sql("UPDATE users SET access_status = 'ativo', cadastro_completo = 1, display_name = :n"
+        self.sql("UPDATE users SET access_status = 'ativo', cadastro_completo = 1, privacidade_aceita_em = '2026-10-01', display_name = :n"
                  " WHERE id = :u",
                  n=nome, u=user_id)
         if renda is not None:

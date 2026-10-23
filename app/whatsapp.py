@@ -122,6 +122,30 @@ def send_image(to: str, png: bytes, legenda: str) -> None:
     })
 
 
+XLSX_MIME = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+def send_document(to: str, nome: str, conteudo: bytes, legenda: str) -> None:
+    """Sobe o arquivo (.xlsx) na rota /media da API e envia pelo id da mídia."""
+    token = os.getenv("WHATSAPP_TOKEN")
+    phone_number_id = os.getenv("WHATSAPP_PHONE_NUMBER_ID")
+    if not token or not phone_number_id:
+        raise RuntimeError("WHATSAPP_TOKEN ou WHATSAPP_PHONE_NUMBER_ID não definidos.")
+    upload = httpx.post(
+        f"{GRAPH_API_URL}/{phone_number_id}/media",
+        headers={"Authorization": f"Bearer {token}"},
+        data={"messaging_product": "whatsapp", "type": XLSX_MIME},
+        files={"file": (nome, conteudo, XLSX_MIME)},
+        timeout=30,
+    )
+    upload.raise_for_status()
+    _post_message({
+        "to": to,
+        "type": "document",
+        "document": {"id": upload.json()["id"], "filename": nome, "caption": legenda[:1024]},
+    })
+
+
 def send_buttons_ids(to: str, body: str, buttons: list[tuple[str, str]]) -> None:
     """Botões de resposta rápida com id próprio: (id, título). A Meta aceita no máximo 3."""
     _post_message({
@@ -170,7 +194,9 @@ def send_list(to: str, resposta: Resposta) -> None:
 def send_reply(to: str, resposta: str | Resposta | None) -> None:
     if resposta is None:
         return  # número não liberado: silêncio
-    if isinstance(resposta, Resposta) and resposta.imagem:
+    if isinstance(resposta, Resposta) and resposta.documento:
+        send_document(to, resposta.documento[0], resposta.documento[1], resposta.texto)
+    elif isinstance(resposta, Resposta) and resposta.imagem:
         send_image(to, resposta.imagem, resposta.texto)
     elif isinstance(resposta, Resposta) and resposta.lista:
         send_list(to, resposta)

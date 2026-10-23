@@ -13,6 +13,7 @@ from app.comandos.ajuda import comando_ajuda, comando_ajuda_usuario, comando_gui
 from app.comandos.cadastro import garantir_usuario
 from app.comandos.casal import ESTADO as ESTADO_CASAL
 from app.comandos.casal import comando_casal, comando_entrar, continuar_casal
+from app.comandos import aviso
 from app.comandos.categorias import ESTADO as ESTADO_CATEGORIAS
 from app.comandos.categorias import (
     ESTADO_NOVA,
@@ -30,11 +31,18 @@ from app.comandos.estado import ler_estado, limpar_estado
 from app.comandos.fixos import comando_fixos
 from app.comandos.formato import normalizar
 from app.comandos.gasto import ESTADO as ESTADO_GASTO
-from app.comandos.gasto import comando_gasto, continuar_gasto, frase_de_gasto
+from app.comandos.gasto import (
+    comando_gasto,
+    continuar_gasto,
+    frase_de_gasto,
+    ler_frase,
+    parece_gasto,
+)
 from app.comandos.inicio import ESTADO as ESTADO_INICIO
 from app.comandos.inicio import comando_inicio, continuar_inicio
 from app.comandos.lembretes import comando_lembretes, comando_testar_lembrete
 from app.comandos.metas import comando_metas
+from app.comandos.meus_dados import comando_meus_dados
 from app.comandos.objetivos import ESTADO as ESTADO_OBJETIVO
 from app.comandos.objetivos import ESTADO_GERIR as ESTADO_OBJETIVO_GERIR
 from app.comandos.objetivos import (
@@ -87,6 +95,7 @@ COMANDOS_COM_USUARIO = {
     "pagar": comando_pagar,
     "grafico": comando_grafico,
     "apagar_meus_dados": comando_apagar,
+    "meus_dados": comando_meus_dados,
     "casal": comando_casal,
     "entrar": comando_entrar,
     "sair_casal": comando_sair_casal,
@@ -97,7 +106,7 @@ COMANDOS_COM_USUARIO = {
 COMANDOS_CONHECIDOS = {
     "inicio", "metas", "resumo", "gasto", "entrada", "categorias", "fixos",
     "previsao", "diagnostico", "objetivos", "parcelas", "pagar", "desfazer", "privacidade",
-    "apagar_meus_dados", "ajuda", "guia", "grafico", "casal", "entrar", "grupo", "sair_casal",
+    "apagar_meus_dados", "meus_dados", "ajuda", "guia", "grafico", "casal", "entrar", "grupo", "sair_casal",
     "lembretes",
 }
 
@@ -105,7 +114,7 @@ COMANDOS_CONHECIDOS = {
 COMANDOS_ADMIN = {"liberar", "negar", "bloquear", "pendentes", "usuarios", "testar_lembrete"}
 
 # Comandos que a IA pode escolher numa frase livre (apagar dados só por comando explícito).
-COMANDOS_PELA_IA = COMANDOS_CONHECIDOS - {"apagar_meus_dados", "lembretes"}
+COMANDOS_PELA_IA = COMANDOS_CONHECIDOS - {"apagar_meus_dados", "meus_dados", "lembretes"}
 
 BOAS_VINDAS = "Oi, eu sou a Dona Fatura! Vou cuidar das suas contas com você."
 
@@ -142,9 +151,11 @@ def processar_comprovante(telefone: str, tipo: str, baixar) -> str | Resposta | 
     if not cadastro_completo(telefone):
         return MSG_ANTES_DO_INICIO
     conversa = ler_estado(telefone)
-    if conversa is not None and conversa[0] == ESTADO_ENTRADA:
+    if conversa is not None and conversa[0] == ESTADO_ENTRADA and aviso.aceitou(telefone):
         # Depois de /entrada sem valor, o arquivo é lido como holerite.
         return receber_holerite(telefone, tipo, baixar)
+    if not aviso.aceitou(telefone):
+        return aviso.pedir_reenvio(telefone)  # antes de baixar ou mandar à IA
     limpar_estado(telefone)  # um arquivo novo cancela a conversa em andamento
     return receber_comprovante(telefone, tipo, baixar)
 
@@ -155,6 +166,9 @@ def _continuar_conversa(telefone: str, texto: str) -> str | Resposta | None:
     if conversa is None:
         return None
     estado, dados = conversa
+    if estado == aviso.ESTADO:
+        resposta, refazer = aviso.continuar(telefone, dados, texto)
+        return resposta if refazer is None else processar_mensagem(telefone, refazer)
     if estado == ESTADO_INICIO:
         return continuar_inicio(telefone, dados, texto)
     if estado == ESTADO_CATEGORIAS:
@@ -206,6 +220,15 @@ def frase_pela_ia(telefone: str, texto: str) -> str | Resposta | None:
     return _executar_comando(telefone, nome, argumentos)
 
 
+def _e_registro(telefone: str, texto: str, nome: str) -> bool:
+    """Mensagem que começa um registro (gasto ou entrada), por comando ou frase livre."""
+    if texto.strip().startswith("/"):
+        return nome in ("gasto", "entrada")
+    if ler_estado(telefone) is not None:
+        return False  # é resposta de uma conversa em andamento
+    return ler_frase(texto) is not None or parece_gasto(texto)
+
+
 def _inicio_em_andamento(telefone: str) -> bool:
     conversa = ler_estado(telefone)
     return conversa is not None and conversa[0] == ESTADO_INICIO
@@ -233,7 +256,9 @@ def processar_mensagem(telefone: str, texto: str) -> str | Resposta | None:
         permitido = nome in ("inicio", "ajuda", "guia") if texto.strip().startswith("/") else _inicio_em_andamento(telefone)
         if not permitido:
             return MSG_ANTES_DO_INICIO  # sem IA, sem comando: só pede o /inicio
-    if texto.strip().startswith("/"):
+    if _e_registro(telefone, texto, nome) and not aviso.aceitou(telefone):
+        resposta = aviso.pedir(telefone, texto)  # aviso de privacidade antes do 1º registro
+    elif texto.strip().startswith("/"):
         resposta = _executar_comando(telefone, nome, argumentos)
     else:
         resposta = (

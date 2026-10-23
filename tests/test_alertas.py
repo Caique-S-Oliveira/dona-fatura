@@ -4,6 +4,7 @@ Os testes de banco rodam SQL de verdade num SQLite em memória (nunca no banco r
 envio do WhatsApp por uma lista, então nada é enviado de verdade.
 """
 import os
+import time
 import unittest
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -209,6 +210,7 @@ class TestCron(BaseCron):
         cat = self.categoria(ANA, "Restaurante", "Variável")
         for _ in range(5):
             self.registrar(ANA, 50, "meu", categoria=cat)
+        time.sleep(0.01)  # created_at tem milissegundos: sem isso o "último" gasto pode empatar com os outros
         self.registrar(ANA, 400, "meu", categoria=cat)  # o gasto que acabou de ser confirmado
         alertas.abrir_fila()
         alertas.preparar_alerta_gasto(ANA, conta, usuario, {"valor": "400"}, cat)

@@ -89,11 +89,12 @@ def _historico(account_id, user_id, nome_chave: str, dia: date) -> list[tuple[da
     return [(l.transaction_date, l.amount) for l in linhas if chave(l.payee or l.description or "") == nome_chave]
 
 
-def _guardar_vencimento(conta_id: str, vencimento: date) -> None:
+def _guardar_vencimento(account_id, conta_id: str, vencimento: date) -> None:
     with get_engine().begin() as connection:
         connection.execute(
-            text("UPDATE recurring_transactions SET next_due_date = :data WHERE id = :id"),
-            {"data": vencimento, "id": conta_id},
+            text("UPDATE recurring_transactions SET next_due_date = :data"
+                " WHERE id = :id AND account_id = :conta"),
+            {"data": vencimento, "id": conta_id, "conta": account_id},
         )
 
 
@@ -146,7 +147,7 @@ def verificar_recorrente(telefone: str, account_id, user_id, dados: dict, catego
             if conta.ativa:
                 vencimento = avancar_vencimento(conta.proximo, dia)
                 if vencimento:
-                    _guardar_vencimento(conta.id, vencimento)
+                    _guardar_vencimento(account_id, conta.id, vencimento)
         return None  # já respondida (sim ou não): não pergunta de novo
     valor = Decimal(dados["valor"])
     meses = meses_parecidos(valor, dia, _historico(account_id, user_id, nome_chave, dia))

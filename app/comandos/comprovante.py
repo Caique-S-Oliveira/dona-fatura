@@ -8,6 +8,20 @@ from app.comandos.gasto import comecar_gasto
 from app.comandos.resposta import Resposta
 
 TIPOS_ACEITOS = (*ia.TIPOS_DE_IMAGEM, ia.TIPO_PDF)
+
+# Primeiros bytes de cada formato: o tipo declarado na mensagem não basta, o conteúdo tem que bater.
+_ASSINATURAS = {
+    "image/jpeg": (b"\xff\xd8\xff",),
+    "image/png": (b"\x89PNG\r\n\x1a\n",),
+    "image/gif": (b"GIF87a", b"GIF89a"),
+    "application/pdf": (b"%PDF-",),
+}
+
+
+def tipo_confere(conteudo: bytes, tipo: str) -> bool:
+    if tipo == "image/webp":
+        return conteudo[:4] == b"RIFF" and conteudo[8:12] == b"WEBP"
+    return any(conteudo.startswith(a) for a in _ASSINATURAS.get(tipo, ()))
 MSG_TIPO = "Só leio foto (JPG ou PNG) ou PDF. Ou mande: /gasto 45,90 mercado"
 MSG_NAO_LEU = "Não consegui ler esse comprovante. Mande um texto, ex.: /gasto 45,90 mercado"
 SEM_FAVORECIDO = "Comprovante"
@@ -63,6 +77,9 @@ def receber_comprovante(
     conteudo = baixar()
     if conteudo is None:
         return MSG_NAO_LEU
+    if not tipo_confere(conteudo, tipo):
+        del conteudo
+        return MSG_TIPO
     try:
         extraido = ia.ler_comprovante(conteudo, tipo)
     finally:

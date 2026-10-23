@@ -350,7 +350,7 @@ class TestEscopoNoRegistro(BancoDeTeste):
 
         extraido = {"valor": "45,90", "data": None, "favorecido": "Padaria"}
         with patch("app.comandos.comprovante.ia.ler_comprovante", return_value=extraido):
-            resposta = receber_comprovante(BIA, "image/jpeg", lambda: b"foto")
+            resposta = receber_comprovante(BIA, "image/jpeg", lambda: b"\xff\xd8\xff foto")
         self.assertEqual(resposta.botoes, ("Meu", "Conjunto"))
 
     def test_tudo_junto_nao_pergunta_e_o_sufixo_meu_ainda_vale(self, _rec):

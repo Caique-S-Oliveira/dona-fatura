@@ -7,7 +7,7 @@ import os
 import unittest
 from unittest.mock import MagicMock, patch
 
-from app import whatsapp
+from app import limites, whatsapp
 from app.comandos import acesso, processar_mensagem
 from app.comandos.acesso import MSG_ANTES_DO_INICIO, MSG_LIBERADO, MSG_PENDENTE, so_digitos
 from app.comandos.ajuda import TEXTO_AJUDA, TEXTO_ADMIN, TEXTO_INICIAR
@@ -45,6 +45,7 @@ def payload(mensagem, nome=None):
 class BaseAcesso(BancoDeTeste):
     def setUp(self):
         super().setUp()
+        limites.limpar()  # o limite de mensagens por minuto é global
         ambiente = patch.dict(os.environ, {"ADMIN_PHONE": "+55 (11) 90000-0000", "ADMIN_NUMERO": "",
                                            "CODIGO_CONVITE": "abc123"})
         ambiente.start()

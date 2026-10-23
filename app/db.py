@@ -22,7 +22,12 @@ def get_engine() -> Engine:
             "postgresql://", "postgresql+psycopg://", 1
         )
 
-    return create_engine(database_url, pool_pre_ping=True, hide_parameters=True)
+    argumentos = {}
+    if "sslmode" not in database_url and not any(h in database_url for h in ("@localhost", "@127.0.0.1")):
+        argumentos["sslmode"] = "require"  # nunca falar com o banco sem TLS
+    return create_engine(
+        database_url, pool_pre_ping=True, hide_parameters=True, connect_args=argumentos
+    )
 
 
 def test_connection() -> None:

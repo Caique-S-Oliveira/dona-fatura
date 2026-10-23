@@ -6,6 +6,7 @@ from datetime import datetime
 
 from sqlalchemy import text
 
+from app import limites
 from app.db import get_engine
 
 logger = logging.getLogger(__name__)
@@ -24,6 +25,7 @@ MSG_ANTES_DO_INICIO = "Antes de tudo, mande /inicio para configurar."
 
 PREFIXO_BOTAO = "acesso:"  # id dos botões [Liberar] [Negar]: "acesso:liberar:5511999999999"
 MAX_PEDIDOS_POR_VEZ = 5
+MAX_TENTATIVAS_CONVITE = 5  # por número, por hora
 
 
 def so_digitos(telefone: str) -> str:
@@ -249,6 +251,8 @@ def tratar_botao(telefone: str, botao_id: str) -> str | None:
 
 
 def comando_convite(telefone: str, argumentos: str) -> str:
+    if limites.excedeu(f"convite:{telefone}", MAX_TENTATIVAS_CONVITE, 3600):
+        return "Muitas tentativas. Tente de novo mais tarde."  # freio contra adivinhar o código
     if not codigo_convite_valido(argumentos):
         return "Código inválido. Confira e tente de novo."
     liberar_acesso(telefone)

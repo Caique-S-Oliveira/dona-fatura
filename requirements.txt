@@ -1,8 +1,8 @@
-fastapi
-uvicorn
-SQLAlchemy
-psycopg[binary]
-python-dotenv
-httpx
+fastapi==0.143.0
+uvicorn==0.54.0
+SQLAlchemy==2.1.4
+psycopg[binary]==3.3.6
+python-dotenv==1.2.4
+httpx==0.28.1
 anthropic
 matplotlib==3.11.2

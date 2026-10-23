@@ -85,7 +85,7 @@ class TestDeteccao(unittest.TestCase):
     @patch("app.comandos.recorrentes.contas_da_conta", return_value=[conta("Netflix", "39.90", date(2026, 10, 20))])
     def test_conta_conhecida_avanca_o_vencimento(self, _contas, guardar, salvar, _hoje):
         self.assertIsNone(verificar_recorrente(USUARIO, "c1", "u1", DADOS, NETFLIX))
-        guardar.assert_called_once_with("r1", date(2026, 11, 20))
+        guardar.assert_called_once_with("c1", "r1", date(2026, 11, 20))
 
     @patch("app.comandos.recorrentes.contas_da_conta")
     def test_comprovante_sem_favorecido_nao_entra(self, contas, salvar, _hoje):

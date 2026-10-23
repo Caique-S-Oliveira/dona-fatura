@@ -58,7 +58,7 @@ class TestFluxoComprovante(unittest.TestCase):
     @patch("app.comandos.gasto.sugerir", return_value=CATEGORIAS[1])  # Mercado
     @patch("app.comandos.comprovante.ia.ler_comprovante", return_value=EXTRAIDO)
     def test_le_sugere_e_pede_confirmacao(self, _ler, _sugerir, _conta, _lista, salvar):
-        resposta = receber_comprovante(USUARIO, "image/jpeg", lambda: b"foto")
+        resposta = receber_comprovante(USUARIO, "image/jpeg", lambda: b"\xff\xd8\xff foto")
         self.assertIsInstance(resposta, Resposta)
         self.assertEqual(resposta.botoes, ("Sim", "Corrigir"))
         self.assertIn("R$ 45,90", resposta.texto)
@@ -75,12 +75,12 @@ class TestFluxoComprovante(unittest.TestCase):
     @patch("app.comandos.gasto.abrir_lista")
     def test_sem_sugestao_abre_a_lista(self, abrir, _gconta, _gsalvar, _ler, _sugerir, *_):
         abrir.return_value = Resposta("Qual a categoria?")
-        receber_comprovante(USUARIO, "application/pdf", lambda: b"pdf")
+        receber_comprovante(USUARIO, "application/pdf", lambda: b"%PDF- pdf")
         abrir.assert_called_once()
 
     @patch("app.comandos.comprovante.ia.ler_comprovante", return_value=None)
     def test_ia_nao_entendeu(self, _ler, *_):
-        self.assertIn("Não consegui ler", receber_comprovante(USUARIO, "image/png", lambda: b"x"))
+        self.assertIn("Não consegui ler", receber_comprovante(USUARIO, "image/png", lambda: b"\x89PNG\r\n\x1a\n x"))
 
     def test_tipo_nao_aceito_nem_baixa(self, *_):
         baixar = MagicMock()
@@ -157,3 +157,18 @@ class TestIA(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestConteudoDoArquivo(unittest.TestCase):
+    def test_tipo_declarado_precisa_bater_com_o_conteudo(self):
+        from app.comandos.comprovante import tipo_confere
+        self.assertTrue(tipo_confere(b"%PDF-1.7 ...", "application/pdf"))
+        self.assertTrue(tipo_confere(b"RIFF\x00\x00\x00\x00WEBPVP8 ", "image/webp"))
+        self.assertFalse(tipo_confere(b"MZ\x90\x00 executavel", "image/png"))
+        self.assertFalse(tipo_confere(b"<html>", "application/pdf"))
+
+    def test_arquivo_falso_nem_chega_na_ia(self):
+        with patch("app.comandos.comprovante.ia.ler_comprovante") as ler:
+            resposta = receber_comprovante(USUARIO, "image/png", lambda: b"MZ\x90\x00")
+        ler.assert_not_called()
+        self.assertIn("foto", resposta)

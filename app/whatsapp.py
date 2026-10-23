@@ -7,7 +7,7 @@ import httpx
 from dotenv import load_dotenv
 from sqlalchemy import text
 
-from app import alertas
+from app import alertas, limites
 from app.comandos import acesso, lembretes
 from app.comandos import processar_comprovante, processar_mensagem
 from app.comandos.resposta import Resposta
@@ -20,6 +20,8 @@ logger = logging.getLogger(__name__)
 
 GRAPH_API_URL = "https://graph.facebook.com/v21.0"
 MAX_MIDIA = 5 * 1024 * 1024  # 5 MB: limite de imagem da API do Claude
+MAX_TEXTO = 1000  # caracteres aceitos por mensagem (o resto é descartado antes da IA)
+MAX_MENSAGENS_POR_MINUTO = 20  # por número; passou disso, ignora (custo de IA e abuso)
 
 
 def verify_signature(body: bytes, signature_header: str | None) -> bool:
@@ -291,7 +293,12 @@ def handle_incoming(payload: dict) -> None:
                 continue
             if not register_message(message_id, sender):
                 continue  # mensagem repetida
+            if limites.excedeu(f"msg:{sender}", MAX_MENSAGENS_POR_MINUTO, 60):
+                logger.warning("Limite de mensagens por minuto excedido (***%s)", sender[-4:])
+                continue
             texto = message_text(message)
+            if texto is not None:
+                texto = texto[:MAX_TEXTO]
             botao = message_button_id(message)
             if botao and botao.startswith(acesso.PREFIXO_BOTAO):
                 confirmacao = acesso.tratar_botao(sender, botao)  # [Liberar] [Negar] do admin

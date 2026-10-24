@@ -7,6 +7,7 @@ TEXTO_AJUDA = """*Dona Fatura - comandos*
 *Registrar*
 /gasto 45,90 mercado
 /entrada 3000 salário
+/renda outubro 5000 - renda esperada de um mês (renda que varia)
 /desfazer - desfaz o último registro
 Também vale escrever: "gastei 45 no mercado" ou mandar a foto/PDF do comprovante.
 

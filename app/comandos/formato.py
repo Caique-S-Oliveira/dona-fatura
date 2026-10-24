@@ -68,6 +68,17 @@ def formatar_reais(valor: Decimal) -> str:
     return f"R$ {texto}"
 
 
+MESES = (
+    "janeiro", "fevereiro", "março", "abril", "maio", "junho",
+    "julho", "agosto", "setembro", "outubro", "novembro", "dezembro",
+)
+
+
+def mes_e_ano(dia: date) -> str:
+    """date(2026, 10, 5) -> "outubro/2026"."""
+    return f"{MESES[dia.month - 1]}/{dia.year}"
+
+
 def formatar_pct(valor: Decimal) -> str:
     """Decimal("30.00") -> "30%"; Decimal("12.50") -> "12,5%"."""
     texto = f"{valor:.2f}".rstrip("0").rstrip(".").replace(".", ",")

@@ -33,6 +33,18 @@ PERGUNTA_FORMATO = (
     "3 - usar 50/30/20 (pronto, em %)"
 )
 
+PERGUNTA_VARIACAO = (
+    "Sua renda é fixa ou varia de mês a mês?\n"
+    "1 - fixa\n"
+    "2 - varia"
+)
+
+EXPLICA_RENDA = (
+    "Sem problema: esse valor vale como padrão. Para um mês diferente, mande "
+    "/renda outubro 5000 (vale para vários: /renda outubro 5000, novembro 3000). "
+    "Veja os meses com /renda."
+)
+
 MSG_PRIVACIDADE = (
     "Privacidade: guardo só seu nome, renda, metas e os registros que você confirmar "
     "(valor, data, favorecido e categoria). Fotos e PDFs são descartados depois da leitura. "
@@ -90,8 +102,18 @@ def proximo_passo(dados: dict, texto: str) -> tuple[str, dict]:
         renda = ler_numero(resposta)
         if renda is None or renda <= 0:
             return "Não entendi o valor. Mande só o número, ex.: 4500 ou 4.500,00", dados
-        dados.update(passo="formato", renda=str(renda))
-        return PERGUNTA_FORMATO, dados
+        dados.update(passo="variacao", renda=str(renda))
+        return PERGUNTA_VARIACAO, dados
+
+    if passo == "variacao":
+        escolha = normalizar(resposta).strip(" .!")
+        if escolha in ("1", "fixa", "fixo"):
+            dados.update(passo="formato", varia=False)
+            return PERGUNTA_FORMATO, dados
+        if escolha in ("2", "varia", "variavel", "muda"):
+            dados.update(passo="formato", varia=True)
+            return f"{EXPLICA_RENDA}\n\n{PERGUNTA_FORMATO}", dados
+        return "Responda 1 ou 2.\n" + PERGUNTA_VARIACAO, dados
 
     if passo == "formato":
         escolha = normalizar(resposta).replace(" ", "")

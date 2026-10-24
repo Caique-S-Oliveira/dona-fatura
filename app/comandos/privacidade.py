@@ -55,6 +55,7 @@ def _apagar(telefone: str, user_id, account_id) -> bool:
             "DELETE FROM savings_goals WHERE account_id = :conta",
             "DELETE FROM installments WHERE account_id = :conta",
             "DELETE FROM goals WHERE account_id = :conta",
+            "DELETE FROM income_plans WHERE account_id = :conta",
             "DELETE FROM sent_alerts WHERE account_id = :conta",
             "DELETE FROM reminder_log WHERE user_id = :usuario",
             "DELETE FROM pending_notices WHERE user_id = :usuario",

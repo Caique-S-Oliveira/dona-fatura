@@ -35,7 +35,7 @@ class TestInicio(unittest.TestCase):
         return mensagem, dados
 
     def test_fluxo_em_reais(self):
-        _, dados = self.conversa("Ana", "4.500,00", "1", "2000", "1500", "0", "300", "200")
+        _, dados = self.conversa("Ana", "4.500,00", "1", "1", "2000", "1500", "0", "300", "200")
         self.assertEqual(dados["passo"], "fim")
         self.assertEqual(dados["renda"], "4500.00")
         self.assertEqual(dados["formato"], "amount")
@@ -46,15 +46,32 @@ class TestInicio(unittest.TestCase):
         self.assertIn(MSG_PRIVACIDADE, texto)
 
     def test_atalho_50_30_20(self):
-        _, dados = self.conversa("Ana", "4000", "3")
+        _, dados = self.conversa("Ana", "4000", "1", "3")
         self.assertEqual(dados["passo"], "fim")
         self.assertIn("Fixo: 50% (R$ 2.000,00)", mensagem_final(dados))
 
     def test_pct_nao_passa_de_100(self):
-        mensagem, dados = self.conversa("Ana", "4000", "2", "60", "50")
+        mensagem, dados = self.conversa("Ana", "4000", "1", "2", "60", "50")
         self.assertIn("passa de 100%", mensagem)
         self.assertIn("40%", mensagem)
         self.assertEqual(dados["indice"], 1)  # continua perguntando o mesmo tipo
+
+    def test_renda_que_varia_explica_o_comando_renda(self):
+        mensagem, dados = self.conversa("Ana", "4000", "2")
+        self.assertEqual(dados["passo"], "formato")
+        self.assertTrue(dados["varia"])
+        self.assertIn("/renda outubro 5000", mensagem)
+        self.assertIn("Como quer definir suas metas?", mensagem)
+
+    def test_renda_fixa_vai_direto_para_as_metas(self):
+        mensagem, dados = self.conversa("Ana", "4000", "fixa")
+        self.assertFalse(dados["varia"])
+        self.assertNotIn("/renda", mensagem)
+
+    def test_variacao_invalida_pergunta_de_novo(self):
+        mensagem, dados = self.conversa("Ana", "4000", "talvez")
+        self.assertEqual(dados["passo"], "variacao")
+        self.assertIn("Responda 1 ou 2", mensagem)
 
     def test_renda_invalida_pergunta_de_novo(self):
         mensagem, dados = self.conversa("Ana", "não sei")
@@ -62,7 +79,7 @@ class TestInicio(unittest.TestCase):
         self.assertIn("Não entendi", mensagem)
 
     def test_formato_invalido(self):
-        mensagem, dados = self.conversa("Ana", "4000", "talvez")
+        mensagem, dados = self.conversa("Ana", "4000", "1", "talvez")
         self.assertEqual(dados["passo"], "formato")
 
     def test_aviso_metas_acima_da_renda(self):

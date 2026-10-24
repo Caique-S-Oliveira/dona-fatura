@@ -179,6 +179,14 @@ def separar_casal(user_id, account_id) -> Separacao | None:
             _inserir(connection, "accounts", {"id": nova[usuario], "owner_user_id": usuario})
             _inserir(connection, "members", {"account_id": nova[usuario], "user_id": usuario,
                                              "role": "owner", "expected_income": m.expected_income})
+        for m in membros:  # a renda esperada de cada mês vai com a pessoa
+            usuario = str(m.user_id)
+            for plano in connection.execute(
+                text("SELECT month, amount FROM income_plans WHERE account_id = :a AND user_id = :u"),
+                {"a": account_id, "u": usuario},
+            ).mappings().all():
+                _inserir(connection, "income_plans", {"account_id": nova[usuario], "user_id": usuario,
+                                                      "month": plano["month"], "amount": plano["amount"]})
         _copiar_dados(connection, account_id, nova)
         connection.execute(text("DELETE FROM accounts WHERE id = :a"), {"a": account_id})
     eu = next(m for m in membros if str(m.user_id) == str(user_id))

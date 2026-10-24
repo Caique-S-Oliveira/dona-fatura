@@ -42,6 +42,9 @@ def montar_planilha(user_id, account_id) -> bytes:
         metas = _linhas(c,
             "SELECT type, value_type, value, member_user_id FROM goals"
             " WHERE account_id = :conta AND (member_user_id IS NULL OR member_user_id = :usuario) ORDER BY type", p)
+        rendas = _linhas(c,
+            "SELECT month, amount FROM income_plans WHERE account_id = :conta AND user_id = :usuario"
+            " ORDER BY month", p)
         categorias = _linhas(c,
             "SELECT name, type, is_default FROM categories WHERE account_id = :conta ORDER BY type, name", p)
         regras = _linhas(c,
@@ -87,6 +90,7 @@ def montar_planilha(user_id, account_id) -> bytes:
         ("Metas", ["Tipo", "Formato", "Valor", "De quem"],
          [[m.type, FORMATO_META.get(m.value_type, m.value_type), m.value,
            "Só minha" if m.member_user_id else "Da conta"] for m in metas]),
+        ("Renda por mês", ["Mês", "Renda esperada (R$)"], [[r.month, r.amount] for r in rendas]),
         ("Categorias", ["Nome", "Tipo", "Padrão"], [[k.name, k.type, bool(k.is_default)] for k in categorias]),
         ("Regras aprendidas", ["Favorecido", "Categoria"], [[r.normalized_payee, r.categoria] for r in regras]),
         ("Objetivos", ["Nome", "Valor alvo (R$)", "Prazo", "Guardado (R$)"],

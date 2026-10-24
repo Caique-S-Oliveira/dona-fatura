@@ -98,6 +98,87 @@ def variacao_pct(atual: Decimal, anterior: Decimal) -> int | None:
     return int(((atual - anterior) / anterior * 100).quantize(Decimal("1")))
 
 
+# ---------- renda do mês (esperada x recebida) ----------
+
+@dataclass
+class RendaMes:
+    esperada: Decimal | None  # /renda do mês, ou o padrão do /inicio
+    recebida: Decimal  # entradas registradas no mês
+
+    def valor(self, mes_passado: bool) -> Decimal | None:
+        """Mês atual ou futuro: a esperada, mas a recebida vale se for maior.
+        Mês passado: a recebida, ou a esperada se nada foi recebido."""
+        if mes_passado:
+            return self.recebida if self.recebida > 0 else self.esperada
+        if self.esperada is None:
+            return self.recebida if self.recebida > 0 else None
+        return max(self.esperada, self.recebida)
+
+
+@dataclass
+class RendaPessoa:
+    user_id: str
+    nome: str | None
+    renda: RendaMes
+    mes_passado: bool
+    propria: bool  # True = a esperada veio do /renda do mês (False = padrão do /inicio)
+
+    @property
+    def valor(self) -> Decimal | None:
+        return self.renda.valor(self.mes_passado)
+
+
+def _decimal(valor) -> Decimal | None:
+    return None if valor is None else Decimal(str(valor))
+
+
+def rendas_do_mes(account_id, dia: date) -> list[RendaPessoa]:
+    """A renda de cada pessoa da conta no mês de `dia` (a mais antiga primeiro)."""
+    inicio = dia.replace(day=1)
+    with get_engine().connect() as connection:
+        linhas = connection.execute(
+            text(
+                "SELECT m.user_id, u.display_name, p.amount AS plano, m.expected_income AS padrao,"
+                " (SELECT COALESCE(SUM(t.amount), 0) FROM transactions t"
+                "  WHERE t.account_id = m.account_id AND t.created_by_user_id = m.user_id"
+                "  AND t.transaction_type = 'income' AND t.voided_at IS NULL"
+                "  AND t.transaction_date BETWEEN :inicio AND :fim) AS recebida"
+                " FROM members m JOIN users u ON u.id = m.user_id"
+                " LEFT JOIN income_plans p ON p.account_id = m.account_id"
+                " AND p.user_id = m.user_id AND p.month = :inicio"
+                " WHERE m.account_id = :conta ORDER BY m.joined_at"
+            ),
+            {"conta": account_id, "inicio": inicio, "fim": ultimo_dia_do_mes(dia)},
+        ).all()
+    passado = inicio < hoje().replace(day=1)
+    return [
+        RendaPessoa(
+            str(l.user_id),
+            l.display_name,
+            RendaMes(_decimal(l.plano if l.plano is not None else l.padrao), _decimal(l.recebida) or Decimal("0")),
+            passado,
+            l.plano is not None,
+        )
+        for l in linhas
+    ]
+
+
+def renda_esperada_do_mes(account_id, dia: date) -> Decimal | None:
+    """Só a renda esperada do mês (de todos da conta somada), sem olhar o que já foi recebido."""
+    valores = [p.renda.esperada for p in rendas_do_mes(account_id, dia) if p.renda.esperada is not None]
+    return sum(valores, Decimal("0")) if valores else None
+
+
+def renda_do_mes(account_id, dia: date, user_id=None) -> Decimal | None:
+    """Renda do mês de uma pessoa (user_id) ou de todos da conta somada. None se não há renda."""
+    valores = [
+        pessoa.valor
+        for pessoa in rendas_do_mes(account_id, dia)
+        if (user_id is None or pessoa.user_id == str(user_id)) and pessoa.valor is not None
+    ]
+    return sum(valores, Decimal("0")) if valores else None
+
+
 # ---------- previsão do fim do mês ----------
 
 def ultimo_dia_do_mes(dia: date) -> date:
@@ -125,6 +206,7 @@ class Previsao:
     dias_restantes: int
     base_media: str  # "3 meses" ou "mes atual" (de onde veio a média)
     dias_historico: int | None = None  # dias desde o primeiro registro (None = não informado)
+    renda_mes: Decimal | None = None  # renda do mês pela regra de renda_do_mes (None = sem renda cadastrada)
 
     @property
     def pouco_historico(self) -> bool:
@@ -141,7 +223,15 @@ class Previsao:
 
     @property
     def saldo_final(self) -> Decimal:
+        """Saldo considerando só o que já foi recebido."""
         return self.entradas - self.saidas_previstas
+
+    @property
+    def saldo_com_renda_esperada(self) -> Decimal | None:
+        """Saldo se a renda esperada do mês entrar toda (None = sem renda cadastrada)."""
+        if self.renda_mes is None:
+            return None
+        return max(self.renda_mes, self.entradas) - self.saidas_previstas
 
 
 def calcular_previsao(
@@ -346,6 +436,7 @@ def previsao_do_mes(account_id, user_id, dia: date) -> Previsao:
         base,
     )
     previsao.dias_historico = dias_de_historico(primeiro, dia)
+    previsao.renda_mes = renda_do_mes(account_id, dia)
     return previsao
 
 

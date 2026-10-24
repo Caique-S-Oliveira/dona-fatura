@@ -258,3 +258,15 @@ CREATE TABLE IF NOT EXISTS reminder_log (
 
 -- Aviso de privacidade (veja sql/alter_privacidade_aceite.sql).
 ALTER TABLE users ADD COLUMN IF NOT EXISTS privacidade_aceita_em TIMESTAMPTZ;
+
+-- Renda esperada por mês (veja sql/alter_renda.sql).
+CREATE TABLE IF NOT EXISTS income_plans (
+    account_id UUID NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    month DATE NOT NULL CHECK (EXTRACT(DAY FROM month) = 1),
+    amount NUMERIC(12, 2) NOT NULL CHECK (amount > 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (account_id, user_id, month)
+);
+ALTER TABLE income_plans ENABLE ROW LEVEL SECURITY;

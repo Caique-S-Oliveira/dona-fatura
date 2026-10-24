@@ -4,7 +4,8 @@ from sqlalchemy import Connection, text
 
 from app.comandos.cadastro import conta_do_usuario
 from app.comandos.casal import conta_em_casal
-from app.comandos.formato import formatar_pct, formatar_reais, ler_numero, normalizar
+from app import financas
+from app.comandos.formato import formatar_pct, formatar_reais, ler_numero, mes_e_ano, normalizar
 from app.db import get_engine
 
 TIPOS = ("Fixo", "Variável", "Assinatura", "Investimento", "Reserva de emergência")
@@ -126,41 +127,22 @@ def ler_metas(account_id, user_id=None) -> Metas:
     return {linha.type: (linha.value_type, linha.value) for linha in linhas}
 
 
-def ler_renda(account_id, user_id) -> Decimal | None:
-    with get_engine().connect() as connection:
-        return connection.execute(
-            text(
-                "SELECT expected_income FROM members"
-                " WHERE account_id = :conta AND user_id = :usuario"
-            ),
-            {"conta": account_id, "usuario": user_id},
-        ).scalar()
+def ler_renda(account_id, user_id, dia=None) -> Decimal | None:
+    """Renda do mês (padrão: o mês de hoje) de uma pessoa: veja financas.RendaMes."""
+    return financas.renda_do_mes(account_id, dia or financas.hoje(), user_id)
 
 
-def ler_renda_conjunta(account_id) -> Decimal | None:
-    """Renda de todos da conta somada (no casal, as metas do casal usam as duas rendas)."""
-    with get_engine().connect() as connection:
-        return connection.execute(
-            text("SELECT SUM(expected_income) FROM members WHERE account_id = :conta"),
-            {"conta": account_id},
-        ).scalar()
+def ler_renda_conjunta(account_id, dia=None) -> Decimal | None:
+    """Renda do mês de todos da conta somada (no casal, as metas do casal usam as duas rendas)."""
+    return financas.renda_do_mes(account_id, dia or financas.hoje())
 
 
-def ler_rendas(account_id, user_id) -> list[tuple[str, Decimal | None]]:
-    """(nome, renda) de cada um da conta, com "Você" no lugar do próprio nome.
+def ler_rendas(account_id, user_id, dia=None) -> list[tuple[str, Decimal | None]]:
+    """(nome, renda do mês) de cada um da conta, com "Você" no lugar do próprio nome.
     A renda de cada um é visível ao parceiro."""
-    with get_engine().connect() as connection:
-        linhas = connection.execute(
-            text(
-                "SELECT m.user_id, u.display_name, m.expected_income FROM members m"
-                " JOIN users u ON u.id = m.user_id WHERE m.account_id = :conta"
-                " ORDER BY m.joined_at"
-            ),
-            {"conta": account_id},
-        ).all()
     return [
-        ("Você" if str(l.user_id) == str(user_id) else l.display_name or "Parceiro(a)", l.expected_income)
-        for l in linhas
+        ("Você" if pessoa.user_id == str(user_id) else pessoa.nome or "Parceiro(a)", pessoa.valor)
+        for pessoa in financas.rendas_do_mes(account_id, dia or financas.hoje())
     ]
 
 
@@ -212,7 +194,8 @@ def substituir_metas(connection: Connection, account_id, metas: Metas, user_id=N
 def _mostrar(metas: Metas, renda: Decimal | None) -> str:
     if not metas and renda is None:
         return "Você ainda não tem metas. Mande /inicio para configurar."
-    cabecalho = f"Suas metas (renda {formatar_reais(renda)}):" if renda else "Suas metas:"
+    mes = mes_e_ano(financas.hoje())
+    cabecalho = f"Suas metas (renda de {mes}: {formatar_reais(renda)}):" if renda else "Suas metas:"
     partes = [cabecalho, linhas_metas(metas, renda)]
     aviso = aviso_acima_da_renda(metas, renda)
     if aviso:
@@ -230,7 +213,8 @@ def _mostrar_casal(
     por_pessoa = " · ".join(
         f"{nome} {formatar_reais(renda) if renda is not None else 'sem renda'}" for nome, renda in rendas
     )
-    partes = [f"Renda: {por_pessoa}"]
+    mes = mes_e_ano(financas.hoje())
+    partes = [f"Renda de {mes}: {por_pessoa}"]
     partes.append("Metas do casal:" + (f" (renda junta {formatar_reais(renda_junta)})" if renda_junta else ""))
     partes.append(linhas_metas(conjuntas, renda_junta))
     aviso = aviso_acima_da_renda(conjuntas, renda_junta)

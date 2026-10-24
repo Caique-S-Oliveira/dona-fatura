@@ -96,6 +96,7 @@ class TestTexto(unittest.TestCase):
         self.assertIn("Gastos pessoais do parceiro: R$ 30,00", texto)
 
 
+@patch("app.comandos.resumo.financas.renda_esperada_do_mes", return_value=None)
 @patch("app.comandos.resumo.conta_do_usuario", return_value=("u1", "c1"))
 @patch("app.comandos.resumo.financas.hoje", return_value=date(2026, 10, 16))
 class TestComando(unittest.TestCase):

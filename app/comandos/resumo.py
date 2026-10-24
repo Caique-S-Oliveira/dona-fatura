@@ -30,13 +30,21 @@ def _periodo(inicio: date, fim: date) -> str:
     return f"{inicio:%d} a {fim:%d/%m}"
 
 
-def montar_resumo(titulo: str, periodos: financas.Periodos, atual: Totais, anterior: Totais) -> str:
+def montar_resumo(
+    titulo: str,
+    periodos: financas.Periodos,
+    atual: Totais,
+    anterior: Totais,
+    esperada: Decimal | None = None,
+) -> str:
     inicio, fim, inicio_ant, fim_ant = periodos
     linhas = [
         f"{titulo} ({_periodo(inicio, fim)}):",
         f"Entradas: {_reais(atual.entradas)}{_variacao(atual.entradas, anterior.entradas)}",
         f"Saídas: {_reais(atual.saidas)}{_variacao(atual.saidas, anterior.saidas)}",
     ]
+    if esperada is not None:
+        linhas.append(f"Renda do mês: recebido {_reais(atual.entradas)} x esperado {_reais(esperada)}")
     for tipo, total in sorted(atual.por_tipo.items(), key=lambda item: -item[1]):
         linhas.append(f"  • {tipo}: {_reais(total)}")
     if atual.pessoais_do_parceiro:
@@ -68,4 +76,5 @@ def comando_resumo(telefone: str, argumentos: str) -> str:
     anterior = financas.totais_do_periodo(account_id, user_id, inicio_ant, fim_ant)
     if atual.vazio:
         return "Ainda não há registros neste período. Use /gasto ou /entrada para começar."
-    return montar_resumo(titulo, periodos, atual, anterior)
+    esperada = financas.renda_esperada_do_mes(account_id, dia) if pedido != "semana" else None
+    return montar_resumo(titulo, periodos, atual, anterior, esperada)

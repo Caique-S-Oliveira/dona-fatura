@@ -51,6 +51,12 @@ CREATE TABLE members (
     expected_income INTEGER,
     joined_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
     PRIMARY KEY (account_id, user_id));
+CREATE TABLE income_plans (
+    account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE, user_id TEXT NOT NULL,
+    month DATE NOT NULL, amount NUMERIC NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%d %H:%M:%f', 'now')),
+    PRIMARY KEY (account_id, user_id, month));
 CREATE TABLE categories (
     id TEXT PRIMARY KEY, account_id TEXT NOT NULL REFERENCES accounts (id) ON DELETE CASCADE,
     name TEXT, normalized_name TEXT, type TEXT, is_default INTEGER NOT NULL DEFAULT 0,
@@ -457,14 +463,15 @@ class TestPrivacidadeEntreParceiros(BancoDeTeste):
         self.assertIn("nenhum registro para desfazer", resposta)  # a Bia não registrou nada
 
     def test_rendas_sao_visiveis_aos_dois(self):
+        # A Ana esperava R$ 4.500,00 mas já recebeu R$ 5.000,00 no mês: vale a recebida (maior).
         da_bia = processar_mensagem(BIA, "/metas")
         da_ana = processar_mensagem(ANA, "/metas")
         for texto in (da_bia, da_ana):
-            self.assertIn("R$ 4.500,00", texto)
+            self.assertIn("R$ 5.000,00", texto)
             self.assertIn("R$ 3.000,00", texto)
-            self.assertIn("renda junta R$ 7.500,00", texto)
+            self.assertIn("renda junta R$ 8.000,00", texto)
         self.assertIn("Você R$ 3.000,00", da_bia)
-        self.assertIn("Ana R$ 4.500,00", da_bia)
+        self.assertIn("Ana R$ 5.000,00", da_bia)
 
 
 # ---------- metas do casal e metas individuais ----------
@@ -510,6 +517,23 @@ class TestMetas(BancoDeTeste):
         _, conta = self.ids(CAIO)
         dono = self.sql("SELECT member_user_id FROM goals WHERE account_id = :c", c=conta).scalar()
         self.assertIsNone(dono)  # sem casal só existe a meta da conta
+
+
+class TestRendaPorMesNoCasal(BancoDeTeste):
+    def test_entrar_leva_a_renda_por_mes_da_pessoa(self):
+        self.cadastrar(ANA, "Ana", 4500)
+        self.cadastrar(BIA, "Bia", 3000)
+        usuario_bia, conta_bia = self.ids(BIA)
+        self.sql("INSERT INTO income_plans (account_id, user_id, month, amount) VALUES (:c, :u, '2027-01-01', 3300)",
+                 c=conta_bia, u=usuario_bia)
+        codigo = re.search(r"código do casal: (\w+)", processar_mensagem(ANA, "/casal")).group(1)
+        time.sleep(0.01)
+        processar_mensagem(BIA, f"/entrar {codigo}")
+        conta_casal = self.ids(BIA)[1]
+        self.assertNotEqual(conta_casal, conta_bia)
+        planos = self.sql("SELECT month, amount FROM income_plans WHERE account_id = :c AND user_id = :u",
+                          c=conta_casal, u=usuario_bia).all()
+        self.assertEqual([(str(m), v) for m, v in planos], [("2027-01-01", 3300)])
 
 
 # ---------- /sair_casal ----------
@@ -587,6 +611,21 @@ class TestSairCasal(BancoDeTeste):
             "SELECT u.phone_number, m.expected_income FROM members m JOIN users u ON u.id = m.user_id"
             " WHERE m.account_id IN (:a, :b)", a=conta_ana, b=conta_bia).all()}
         self.assertEqual(rendas, {ANA: 4500, BIA: 3000})
+
+    def test_renda_esperada_por_mes_vai_com_cada_pessoa(self):
+        usuario_ana, _ = self.ids(ANA)
+        usuario_bia, _ = self.ids(BIA)
+        for usuario, valor in ((usuario_ana, 5200), (usuario_bia, 3300)):
+            self.sql("INSERT INTO income_plans (account_id, user_id, month, amount) VALUES (:c, :u, '2027-01-01', :v)",
+                     c=self.conta_antiga, u=usuario, v=valor)
+        self.sair()
+        for telefone, valor in ((ANA, 5200), (BIA, 3300)):
+            usuario, conta = self.ids(telefone)
+            planos = self.sql("SELECT month, amount FROM income_plans WHERE account_id = :c AND user_id = :u",
+                              c=conta, u=usuario).all()
+            self.assertEqual([(str(m), v) for m, v in planos], [("2027-01-01", valor)])
+        self.assertEqual(self.sql("SELECT count(*) FROM income_plans WHERE account_id = :c",
+                                  c=self.conta_antiga).scalar(), 0)
 
     def test_cada_um_fica_com_seus_meu_e_os_dois_com_o_historico_conjunto(self):
         self.sair()

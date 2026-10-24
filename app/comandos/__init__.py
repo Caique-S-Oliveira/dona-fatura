@@ -64,6 +64,8 @@ from app.comandos.previsao import comando_grafico, comando_previsao
 from app.comandos.privacidade import ESTADO as ESTADO_APAGAR
 from app.comandos.privacidade import comando_apagar, comando_privacidade, continuar_apagar
 from app.comandos.recorrentes import ESTADO as ESTADO_RECORRENTE
+from app.comandos.renda import ESTADO as ESTADO_RENDA
+from app.comandos.renda import comando_renda, continuar_renda
 from app.comandos.recorrentes import continuar_recorrente
 from app.comandos.resposta import Resposta
 from app.comandos.sair_casal import ESTADO as ESTADO_SAIR_CASAL
@@ -82,6 +84,7 @@ COMANDOS_COM_USUARIO = {
     "ajuda": comando_ajuda_usuario,
     "inicio": comando_inicio,
     "metas": comando_metas,
+    "renda": comando_renda,
     "gasto": comando_gasto,
     "entrada": comando_entrada,
     "categorias": comando_categorias,
@@ -104,7 +107,7 @@ COMANDOS_COM_USUARIO = {
 
 # Todos os comandos previstos no CLAUDE.md (os que faltam respondem "Ainda estou aprendendo isso").
 COMANDOS_CONHECIDOS = {
-    "inicio", "metas", "resumo", "gasto", "entrada", "categorias", "fixos",
+    "inicio", "metas", "renda", "resumo", "gasto", "entrada", "categorias", "fixos",
     "previsao", "diagnostico", "objetivos", "parcelas", "pagar", "desfazer", "privacidade",
     "apagar_meus_dados", "meus_dados", "ajuda", "guia", "grafico", "casal", "entrar", "grupo", "sair_casal",
     "lembretes",
@@ -114,7 +117,7 @@ COMANDOS_CONHECIDOS = {
 COMANDOS_ADMIN = {"liberar", "negar", "bloquear", "pendentes", "usuarios", "testar_lembrete"}
 
 # Comandos que a IA pode escolher numa frase livre (apagar dados só por comando explícito).
-COMANDOS_PELA_IA = COMANDOS_CONHECIDOS - {"apagar_meus_dados", "meus_dados", "lembretes"}
+COMANDOS_PELA_IA = COMANDOS_CONHECIDOS - {"apagar_meus_dados", "meus_dados", "lembretes", "renda"}
 
 BOAS_VINDAS = "Oi, eu sou a Dona Fatura! Vou cuidar das suas contas com você."
 
@@ -193,6 +196,8 @@ def _continuar_conversa(telefone: str, texto: str) -> str | Resposta | None:
         return continuar_parcela_gerir(telefone, dados, texto)
     if estado == ESTADO_PAGAR:
         return continuar_pagar(telefone, dados, texto)
+    if estado == ESTADO_RENDA:
+        return continuar_renda(telefone, dados, texto)
     if estado == ESTADO_APAGAR:
         return continuar_apagar(telefone, dados, texto)
     if estado == ESTADO_CASAL:
@@ -223,7 +228,8 @@ def frase_pela_ia(telefone: str, texto: str) -> str | Resposta | None:
 def _e_registro(telefone: str, texto: str, nome: str) -> bool:
     """Mensagem que começa um registro (gasto ou entrada), por comando ou frase livre."""
     if texto.strip().startswith("/"):
-        return nome in ("gasto", "entrada")
+        # /renda só registra uma entrada quando diz que a renda já foi recebida.
+        return nome in ("gasto", "entrada") or (nome == "renda" and "recebid" in normalizar(texto))
     if ler_estado(telefone) is not None:
         return False  # é resposta de uma conversa em andamento
     return ler_frase(texto) is not None or parece_gasto(texto)

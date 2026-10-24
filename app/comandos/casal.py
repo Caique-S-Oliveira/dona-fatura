@@ -143,6 +143,15 @@ def _entrar_na_conta(user_id, codigo: str) -> tuple[object, object] | None:
             ),
             {"conta": linha.id, "usuario": user_id},
         )
+        connection.execute(
+            # E a renda esperada por mês também.
+            text(
+                "INSERT INTO income_plans (account_id, user_id, month, amount)"
+                " SELECT :conta, user_id, month, MAX(amount) FROM income_plans"
+                " WHERE user_id = :usuario AND account_id <> :conta GROUP BY user_id, month"
+            ),
+            {"conta": linha.id, "usuario": user_id},
+        )
     return linha.id, linha.owner_user_id
 
 

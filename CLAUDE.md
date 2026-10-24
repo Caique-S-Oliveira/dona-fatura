@@ -44,6 +44,18 @@ esconder o problema; um toque de simpatia, sem sermão. Mensagens curtas (até ~
 - Tipos: Fixo, Variável, Assinatura, Investimento, Reserva de emergência.
 - Subcategorias padrão: Moradia, Mercado, Transporte, Saúde, Lazer, Restaurante, Pets,
   Parcelas/dívidas, Viagens, Educação, Outros; o usuário pode criar outras.
+- Renda por mês (/renda, para quem tem renda que varia): a renda do /inicio é o padrão dos meses
+  sem valor próprio; "/renda outubro 5000" define a esperada de um mês (nome, abreviação, número ou
+  MM/AAAA; vários meses separados por vírgula; "/renda MÊS 0" remove; "/renda" lista), sempre com
+  [Sim] [Corrigir] antes de salvar. Com "recebido" (ou "recebido dia 5") também registra a entrada
+  no mês (dia 1º se não houver dia), perguntando antes se já existe entrada do mesmo valor no mês.
+  Regra da renda do mês: mês atual ou futuro usa a esperada, mas se a recebida (/entrada) for
+  maior, vale a recebida; mês passado usa a recebida, ou a esperada se nada foi recebido.
+  No casal cada um tem a sua e a renda do casal no mês é a soma. As metas em % e o /diagnostico
+  usam a renda do mês e o /metas diz de qual mês é o cálculo. /resumo e /previsao mostram
+  "recebido x esperado"; a /previsao mostra o saldo com a renda esperada e, em outra linha, o
+  saldo só com o que já foi recebido. No /inicio, perguntar se a renda é fixa ou varia (se varia,
+  explicar o /renda). Código: financas.RendaMes / renda_do_mes, app/comandos/renda.py.
 - No /inicio o formato padrão das metas é R$ por tipo; % da renda é opção, com atalho
   opcional "usar 50/30/20". Editáveis em /metas.
 - Objetivos de poupança (/objetivos): nome, valor e prazo; o bot diz quanto falta e quanto
@@ -74,7 +86,7 @@ esconder o problema; um toque de simpatia, sem sermão. Mensagens curtas (até ~
 
 ## Comandos
 /inicio /metas /resumo /gasto VALOR DESCRIÇÃO /entrada VALOR DESCRIÇÃO /categorias /fixos
-/previsao /diagnostico /objetivos /parcelas /pagar (ou /parcelas pagar) /desfazer /privacidade /apagar_meus_dados /ajuda
+/renda /previsao /diagnostico /objetivos /parcelas /pagar (ou /parcelas pagar) /desfazer /privacidade /apagar_meus_dados /ajuda
 /grafico previsao   (outros gráficos só se o piloto pedir)
 /lembretes /casal /entrar CÓDIGO /grupo   (no casal: sufixo "meu" ou "casal", ex.: /resumo casal)
 Mensagem que não é comando -> IA identifica qual comando o usuário quer (resposta curta em
@@ -135,3 +147,4 @@ Etapa 18 concluída — /pagar (e /parcelas pagar): escolhe a parcela por botõe
 Etapa 14 (complemento) concluída — lembrete de inatividade por modelo: aos 3 e aos 7 dias sem mensagem (INATIVIDADE_DIAS), modelo MODELO_LEMBRETE (lembrete_registro) com {{1}} nome e {{2}} último registro dd/mm, só com MODELOS_ATIVOS=1 e dentro do limite de 3/semana; botões Registrar agora / Parar lembretes, /lembretes religa; recusa da API bloqueia o dia e fica no log (tabela reminder_log), sql/alter_lembretes.sql.
 Auditoria de segurança/LGPD, Fase 5 concluída — scanners rodados de novo (pip-audit limpo, achados restantes são falsos positivos), 384 testes passando, relatório em audit/RELATORIO_SEGURANCA_LGPD.md.
 Complemento datas e média concluído — data em /gasto e /entrada ("dia 3", "ontem", dd/mm; futura pede confirmação), comprovante mostra a data lida (ou avisa que usou hoje), média de variáveis só desde o primeiro registro e aviso de histórico < 14 dias na /previsao. Sem SQL novo.
+Complemento renda por mês concluído — /renda (esperada por mês, vários meses, "recebido", remover com 0), regra esperada x recebida, metas/diagnóstico/resumo/previsão usam a renda do mês, /inicio pergunta se a renda varia; tabela income_plans (sql/alter_renda.sql, tests/test_renda.py).

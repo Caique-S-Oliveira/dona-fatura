@@ -37,7 +37,7 @@ class TestLeitura(unittest.TestCase):
         dados = montar_dados({"valor": "10", "data": None, "favorecido": None})
         self.assertEqual(dados["descricao"], "Comprovante")
         self.assertFalse(dados["aprender"])
-        self.assertNotIn("data", dados)
+        self.assertTrue(dados["data_assumida"])  # sem data na imagem: hoje, avisando
 
     def test_valor_invalido(self):
         self.assertIsNone(montar_dados({"valor": "abc", "data": None, "favorecido": "x"}))

@@ -25,6 +25,11 @@ def montar_previsao(previsao: financas.Previsao, fim_do_mes) -> str:
         f"Ainda vence {_reais(p.a_vencer)} e os variáveis devem somar {_reais(p.variaveis)}.",
         f"Saldo previsto no fim do mês: {_reais(p.saldo_final)}",
     ]
+    if p.pouco_historico:
+        linhas.append(
+            f"Atenção: só tenho {p.dias_historico} dia(s) de histórico. "
+            "A estimativa ainda é pouco confiável."
+        )
     if p.entradas == 0:
         linhas.append("Sem entradas registradas: use /entrada VALOR para a previsão ficar certa.")
     elif p.saldo_final < 0:

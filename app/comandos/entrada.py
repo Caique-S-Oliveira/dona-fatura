@@ -1,13 +1,22 @@
 from collections.abc import Callable
+from datetime import date
 from decimal import Decimal
 
 from sqlalchemy import text
 
-from app import ia
+from app import financas, ia
 from app.comandos.cadastro import conta_do_usuario
 from app.comandos.comprovante import TIPOS_ACEITOS, ler_data
 from app.comandos.estado import limpar_estado, salvar_estado
-from app.comandos.formato import eh_nao, eh_sim, formatar_reais, ler_numero, normalizar
+from app.comandos.formato import (
+    MSG_DATA,
+    eh_nao,
+    eh_sim,
+    formatar_reais,
+    ler_numero,
+    normalizar,
+    separar_data,
+)
 from app.comandos.resposta import Resposta
 from app.db import get_engine
 
@@ -47,7 +56,23 @@ def _cabecalho(dados: dict) -> str:
 
 
 def _pergunta_confirmar(dados: dict) -> Resposta:
-    return Resposta(f"{_cabecalho(dados)} Confirma?", BOTOES)
+    aviso = ""
+    if dados.get("data") and date.fromisoformat(dados["data"]) > financas.hoje():
+        aviso = "\nAtenção: essa data ainda não chegou."
+    return Resposta(f"{_cabecalho(dados)}{aviso} Confirma?", BOTOES)
+
+
+def _com_data(argumentos: str) -> tuple[str, str | None]:
+    """Separa "dia 3", "ontem" ou "dd/mm" dos argumentos. ValueError se a data não existe."""
+    resto, data = separar_data(argumentos, financas.hoje())
+    return resto, data.isoformat() if data else None
+
+
+def _novos_dados(valor: Decimal, descricao: str, data: str | None) -> dict:
+    dados = {"valor": str(valor), "descricao": descricao, "fonte": "manual"}
+    if data:
+        dados["data"] = data
+    return dados
 
 
 def _confirmar(telefone: str, dados: dict) -> Resposta:
@@ -88,11 +113,15 @@ def comando_entrada(telefone: str, argumentos: str) -> str | Resposta:
         # O holerite é só uma alternativa: a próxima foto/PDF será lida como holerite.
         salvar_estado(telefone, ESTADO, {"passo": "aguardando"})
         return MSG_OFERTA
+    try:
+        argumentos, data = _com_data(argumentos)
+    except ValueError:
+        return MSG_DATA
     entrada = ler_entrada(argumentos)
     if entrada is None:
         return f"Não entendi a entrada. {FORMATO}"
     valor, descricao = entrada
-    return _confirmar(telefone, {"valor": str(valor), "descricao": descricao, "fonte": "manual"})
+    return _confirmar(telefone, _novos_dados(valor, descricao, data))
 
 
 def receber_holerite(
@@ -126,11 +155,15 @@ def continuar_entrada(telefone: str, dados: dict, texto: str) -> str | Resposta:
     passo = dados.get("passo")
 
     if passo == "aguardando":
+        try:
+            texto, data = _com_data(texto)
+        except ValueError:
+            return MSG_DATA
         entrada = ler_entrada(texto)
         if entrada is None:
             return MSG_NAO_ENTENDI
         valor, descricao = entrada
-        return _confirmar(telefone, {"valor": str(valor), "descricao": descricao, "fonte": "manual"})
+        return _confirmar(telefone, _novos_dados(valor, descricao, data))
 
     if passo == "valor":
         valor = ler_numero(texto)

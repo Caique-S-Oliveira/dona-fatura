@@ -60,7 +60,11 @@ def montar_dados(extraido: dict) -> dict | None:
         dados["aprender"] = False  # sem favorecido não há o que aprender
     data = ler_data(extraido.get("data"))
     if data:
-        dados["data"] = data
+        dados["data"] = data  # a data lida na imagem, não a de hoje
+    else:
+        # não leu (ou veio inválida/futura): grava hoje, mas avisa na confirmação
+        dados["data"] = datetime.now(BRASIL).date().isoformat()
+        dados["data_assumida"] = True
     return dados
 
 

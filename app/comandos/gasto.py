@@ -19,7 +19,16 @@ from app.comandos.categorias import (
     proxima_pagina,
 )
 from app.comandos.estado import limpar_estado, salvar_estado
-from app.comandos.formato import eh_nao, eh_sim, formatar_reais, ler_numero, normalizar
+from app import financas
+from app.comandos.formato import (
+    MSG_DATA,
+    eh_nao,
+    eh_sim,
+    formatar_reais,
+    ler_numero,
+    normalizar,
+    separar_data,
+)
 from app.comandos.recorrentes import verificar_recorrente
 from app.comandos.resposta import Resposta
 from app.db import get_engine
@@ -28,6 +37,7 @@ ESTADO = "gasto"
 BOTOES = ("Sim", "Corrigir")
 BOTOES_CORRIGIR = ("Valor", "Categoria")
 BOTOES_ESCOPO = ("Meu", "Conjunto")
+BOTOES_SIM_NAO = ("Sim", "Não")
 FORMATO = "Use: /gasto 45,90 mercado"
 
 # "gastei 45 no mercado", "paguei R$ 30,50 de uber", "comprei 12 reais de pão"
@@ -171,6 +181,8 @@ def _cabecalho(dados: dict) -> str:
     data = ""
     if dados.get("data"):
         data = f", {date.fromisoformat(dados['data']).strftime('%d/%m/%Y')}"
+        if dados.get("data_assumida"):
+            data += " (não achei a data no comprovante, usei hoje)"
     return f"Gasto de {formatar_reais(Decimal(dados['valor']))} — {dados['descricao']}{data}{privado}."
 
 
@@ -218,18 +230,35 @@ def comecar_gasto(telefone: str, account_id, dados: dict, escopo_explicito: bool
     return sugerir_e_confirmar(telefone, account_id, dados)
 
 
-def iniciar_gasto(telefone: str, gasto: Gasto, escopo_explicito: bool = True) -> str | Resposta:
+def _pergunta_data_futura(dados: dict) -> Resposta:
+    data = date.fromisoformat(dados["data"]).strftime("%d/%m/%Y")
+    return Resposta(f"{data} ainda não chegou. Registrar o gasto mesmo assim?", BOTOES_SIM_NAO)
+
+
+def iniciar_gasto(
+    telefone: str, gasto: Gasto, escopo_explicito: bool = True, data: date | None = None
+) -> str | Resposta:
     valor, descricao, escopo = gasto
     _, account_id = conta_do_usuario(telefone)
     dados = {"valor": str(valor), "descricao": descricao, "escopo": escopo}
+    if data is not None:
+        dados["data"] = data.isoformat()
+        if data > financas.hoje():  # data futura: confirma antes de seguir
+            dados = {**dados, "passo": "data_futura", "escopo_explicito": escopo_explicito}
+            salvar_estado(telefone, ESTADO, dados)
+            return _pergunta_data_futura(dados)
     return comecar_gasto(telefone, account_id, dados, escopo_explicito)
 
 
 def comando_gasto(telefone: str, argumentos: str) -> str | Resposta:
+    try:
+        argumentos, data = separar_data(argumentos, financas.hoje())
+    except ValueError:
+        return MSG_DATA
     gasto = ler_comando(argumentos)
     if gasto is None:
         return f"Não entendi o gasto. {FORMATO}"
-    return iniciar_gasto(telefone, gasto, tem_sufixo_de_escopo(argumentos))
+    return iniciar_gasto(telefone, gasto, tem_sufixo_de_escopo(argumentos), data)
 
 
 def frase_de_gasto(telefone: str, texto: str) -> str | Resposta | None:
@@ -237,6 +266,10 @@ def frase_de_gasto(telefone: str, texto: str) -> str | Resposta | None:
 
     Devolve None se a frase não for sobre gasto.
     """
+    try:
+        texto, data = separar_data(texto, financas.hoje())
+    except ValueError:
+        return MSG_DATA if parece_gasto(texto) else None
     gasto = ler_frase(texto)
     explicito = tem_sufixo_de_escopo(texto)
     if gasto is None and parece_gasto(texto):
@@ -248,7 +281,7 @@ def frase_de_gasto(telefone: str, texto: str) -> str | Resposta | None:
             return f"Não entendi o gasto. {FORMATO}"
     if gasto is None:
         return None
-    return iniciar_gasto(telefone, gasto, explicito)
+    return iniciar_gasto(telefone, gasto, explicito, data)
 
 
 def registrar(account_id, user_id, dados: dict, categoria: Categoria) -> str:
@@ -280,6 +313,18 @@ def continuar_gasto(telefone: str, dados: dict, texto: str) -> str | Resposta:
     user_id, account_id = conta_do_usuario(telefone)
     passo = dados.get("passo")
     escolha = normalizar(texto).strip(" .!")
+
+    if passo == "data_futura":
+        if eh_sim(texto):
+            explicito = dados.get("escopo_explicito", True)
+            dados = {k: v for k, v in dados.items() if k not in ("passo", "escopo_explicito")}
+            return comecar_gasto(telefone, account_id, dados, explicito)
+        if eh_nao(texto):
+            limpar_estado(telefone)
+            return "Ok, não registrei. Mande de novo com a data certa."
+        resposta = _pergunta_data_futura(dados)
+        resposta.texto = "Responda Sim ou Não.\n" + resposta.texto
+        return resposta
 
     if passo == "escopo":
         if escolha in SUFIXOS_MEU:

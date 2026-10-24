@@ -113,6 +113,9 @@ def tres_meses_anteriores(dia: date) -> tuple[date, date]:
     return inicio, fim
 
 
+MIN_DIAS_HISTORICO = 14  # abaixo disso a estimativa ainda é pouco confiável
+
+
 @dataclass
 class Previsao:
     entradas: Decimal  # já entrou no mês
@@ -121,6 +124,11 @@ class Previsao:
     media_diaria: Decimal  # média diária de gastos variáveis
     dias_restantes: int
     base_media: str  # "3 meses" ou "mes atual" (de onde veio a média)
+    dias_historico: int | None = None  # dias desde o primeiro registro (None = não informado)
+
+    @property
+    def pouco_historico(self) -> bool:
+        return self.dias_historico is not None and 0 < self.dias_historico < MIN_DIAS_HISTORICO
 
     @property
     def variaveis(self) -> Decimal:
@@ -284,20 +292,52 @@ def _gasto_variavel(account_id, inicio: date, fim: date, user_id=None) -> Decima
         ).scalar_one()
 
 
-def media_diaria_variaveis(account_id, dia: date, user_id=None) -> tuple[Decimal, str]:
-    """Média por dia dos variáveis nos 3 meses passados; sem histórico, usa o mês atual."""
+def primeiro_registro(account_id, dia: date, user_id=None) -> date | None:
+    """Data do registro mais antigo (até hoje). Dias antes dela não contam como "dias sem gasto"."""
+    filtro = " AND created_by_user_id = :usuario" if user_id is not None else ""
+    with get_engine().connect() as connection:
+        return connection.execute(
+            text(
+                "SELECT MIN(transaction_date) FROM transactions"
+                " WHERE account_id = :conta AND voided_at IS NULL"
+                f" AND transaction_date <= :dia{filtro}"
+            ),
+            {"conta": account_id, "dia": dia, "usuario": user_id},
+        ).scalar()
+
+
+def dias_de_historico(primeiro: date | None, dia: date) -> int:
+    """Quantos dias (contando hoje) desde o primeiro registro; 0 se ainda não há nenhum."""
+    return 0 if primeiro is None else (dia - primeiro).days + 1
+
+
+def media_diaria_variaveis(
+    account_id, dia: date, user_id=None, primeiro: date | None = None
+) -> tuple[Decimal, str]:
+    """Média por dia dos variáveis nos 3 meses passados; sem histórico, usa o mês atual.
+
+    Só conta os dias a partir do primeiro registro (`primeiro`; se None, busca no banco).
+    """
+    if primeiro is None:
+        primeiro = primeiro_registro(account_id, dia, user_id)
+    if primeiro is None:
+        return Decimal("0"), "mes atual"
     inicio, fim = tres_meses_anteriores(dia)
-    total = _gasto_variavel(account_id, inicio, fim, user_id)
-    if total > 0:
-        return total / ((fim - inicio).days + 1), "3 meses"
-    atual = _gasto_variavel(account_id, dia.replace(day=1), dia, user_id)
-    return atual / dia.day, "mes atual"
+    inicio = max(inicio, primeiro)
+    if inicio <= fim:
+        total = _gasto_variavel(account_id, inicio, fim, user_id)
+        if total > 0:
+            return total / ((fim - inicio).days + 1), "3 meses"
+    inicio = max(dia.replace(day=1), primeiro)
+    atual = _gasto_variavel(account_id, inicio, dia, user_id)
+    return atual / ((dia - inicio).days + 1), "mes atual"
 
 
 def previsao_do_mes(account_id, user_id, dia: date) -> Previsao:
     totais = totais_do_periodo(account_id, user_id, dia.replace(day=1), dia)
-    media, base = media_diaria_variaveis(account_id, dia)
-    return calcular_previsao(
+    primeiro = primeiro_registro(account_id, dia)
+    media, base = media_diaria_variaveis(account_id, dia, primeiro=primeiro)
+    previsao = calcular_previsao(
         totais.entradas,
         totais.saidas,
         a_vencer_no_mes(account_id, dia),
@@ -305,6 +345,8 @@ def previsao_do_mes(account_id, user_id, dia: date) -> Previsao:
         (ultimo_dia_do_mes(dia) - dia).days,
         base,
     )
+    previsao.dias_historico = dias_de_historico(primeiro, dia)
+    return previsao
 
 
 # ---------- diagnóstico: real x meta por tipo ----------
